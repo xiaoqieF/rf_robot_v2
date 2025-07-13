@@ -2,7 +2,6 @@
 #include "tf2_ros/transform_listener.h"
 #include "elog/elog.h"
 #include "rclcpp/rclcpp.hpp"
-#include <rclcpp/logging.hpp>
 #include <rclcpp/timer.hpp>
 
 class RfExampleNode : public rclcpp::Node
@@ -19,14 +18,13 @@ public:
             [this]() {
                 // Example usage of getCurrentPose
                 geometry_msgs::msg::PoseStamped global_pose;
-                if (rf_util::getCurrentPose(global_pose, *tf_buffer_, "odom")) {
+                if (rf_util::getCurrentPose(global_pose, *tf_buffer_)) {
                     elog::info("Robot current pose: x: {}, y: {}, z: {}",
                         global_pose.pose.position.x,
                         global_pose.pose.position.y,
                         global_pose.pose.position.z);
                 } else {
                     elog::error("Failed to retrieve current pose.");
-                    RCLCPP_INFO(this->get_logger(), "Current ROS time: %f", this->now().seconds());
                 }
             });
     }
