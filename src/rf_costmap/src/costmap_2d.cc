@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <cstring>
 #include <cmath>
 
@@ -61,6 +62,86 @@ Costmap2D& Costmap2D::operator=(const Costmap2D &other)
         std::copy(other.costmap_data_.get(), other.costmap_data_.get() + (size_x_ * size_y_), costmap_data_.get());
     }
     return *this;
+}
+
+void Costmap2D::copyMapRegion(uint8_t* src, unsigned int src_lower_left_x, unsigned int src_lower_left_y,
+    unsigned int src_size_x, uint8_t* dest, unsigned int dest_lower_left_x, unsigned int dest_lower_left_y,
+    unsigned int dest_size_x, unsigned int region_size_x, unsigned int region_size_y)
+{
+    uint8_t* src_ptr = src + src_lower_left_y * src_size_x + src_lower_left_x;
+    uint8_t* dest_ptr = dest + dest_lower_left_y * dest_size_x + dest_lower_left_x;
+
+    for (unsigned int y = 0; y < region_size_y; ++y) {
+        std::memcpy(dest_ptr, src_ptr, region_size_x);
+        src_ptr += src_size_x;
+        dest_ptr += dest_size_x;
+    }
+}
+
+uint8_t Costmap2D::getCost(unsigned int mx, unsigned int my) const
+{
+    return costmap_data_[getIndex(mx, my)];
+}
+
+void Costmap2D::setCost(unsigned int mx, unsigned int my, uint8_t cost)
+{
+    costmap_data_[getIndex(mx, my)] = cost;
+}
+
+void Costmap2D::mapToWorld(unsigned int mx, unsigned int my, double &wx, double &wy) const
+{
+    wx = origin_x_ + (mx + 0.5) * resolution_;
+    wy = origin_y_ + (my + 0.5) * resolution_;
+}
+
+bool Costmap2D::worldToMap(double wx, double wy, unsigned int &mx, unsigned int &my) const
+{
+    if (wx < origin_x_ || wy < origin_y_) {
+        return false; // Point is out of bounds
+    }
+
+    mx = static_cast<unsigned int>((wx - origin_x_) / resolution_);
+    my = static_cast<unsigned int>((wy - origin_y_) / resolution_);
+    if (mx >= size_x_ || my >= size_y_) {
+        return false; // Point is out of bounds
+    }
+    return true;
+}
+
+void Costmap2D::updateOrigin(double new_origin_x, double new_origin_y)
+{
+    int cell_ox = static_cast<int>((new_origin_x - origin_x_) / resolution_);
+    int cell_oy = static_cast<int>((new_origin_y - origin_y_) / resolution_);
+
+    // Calculate the overlap region
+    int size_x = static_cast<int>(size_x_);
+    int size_y = static_cast<int>(size_y_);
+
+    int lower_left_x = std::min(std::max(0, cell_ox), size_x);
+    int lower_left_y = std::min(std::max(0, cell_oy), size_y);
+    int upper_right_x = std::min(std::max(0, cell_ox + size_x), size_x);
+    int upper_right_y = std::min(std::max(0, cell_oy + size_y), size_y);
+
+    unsigned int new_size_x = upper_right_x - lower_left_x;
+    unsigned int new_size_y = upper_right_y - lower_left_y;
+
+    // Keep the overlap region in a temporary buffer
+    std::unique_ptr<uint8_t[]> overlap = std::make_unique<uint8_t[]>(new_size_x * new_size_y);
+    copyMapRegion(costmap_data_.get(), lower_left_x, lower_left_y, size_x_,
+                  overlap.get(), 0, 0, new_size_x, new_size_x, new_size_y);
+
+    memset(costmap_data_.get(), default_value_, size_x_ * size_y_);
+
+    // Cell aligned
+    origin_x_ = origin_x_ + cell_ox * resolution_;
+    origin_y_ = origin_y_ + cell_oy * resolution_;
+
+    int start_x = lower_left_x - cell_ox;
+    int start_y = lower_left_y - cell_oy;
+
+    // Copy the overlap region back to the costmap
+    copyMapRegion(overlap.get(), 0, 0, new_size_x, costmap_data_.get(),
+    start_x, start_y, size_x_, new_size_x, new_size_y);
 }
 
 }

@@ -27,6 +27,30 @@ public:
 
     ~Costmap2D() = default;
 
+    uint8_t getCost(unsigned int mx, unsigned int my) const;
+    void setCost(unsigned int mx, unsigned int my, uint8_t cost);
+    void mapToWorld(unsigned int mx, unsigned int my, double &wx, double &wy) const;
+    bool worldToMap(double wx, double wy, unsigned int &mx, unsigned int &my) const;
+    void updateOrigin(double origin_x, double origin_y);
+
+    inline unsigned int getIndex(unsigned int mx, unsigned int my) const
+    {
+        return my * size_x_ + mx;
+    }
+
+    unsigned int getSizeX() const { return size_x_; }
+    unsigned int getSizeY() const { return size_y_; }
+    double getResolution() const { return resolution_; }
+    double getOriginX() const { return origin_x_; }
+    double getOriginY() const { return origin_y_; }
+    void setDefaultValue(uint8_t value) { default_value_ = value; }
+    uint8_t getDefaultValue() const { return default_value_; }
+
+private:
+    void copyMapRegion(uint8_t* src, unsigned int src_lower_left_x, unsigned int src_lower_left_y,
+        unsigned int src_size_x, uint8_t* dest, unsigned int dest_lower_left_x, unsigned int dest_lower_left_y,
+        unsigned int dest_size_x, unsigned int region_size_x, unsigned int region_size_y);
+
 private:
     unsigned int size_x_;
     unsigned int size_y_;

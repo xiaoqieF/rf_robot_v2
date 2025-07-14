@@ -43,14 +43,14 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-install(TARGETS rf_util
-  EXPORT export_rf_util
+install(TARGETS ${PROJECT_NAME}
+  EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
 
-ament_export_targets(export_rf_util)
+ament_export_targets(export_${PROJECT_NAME})
 ament_export_include_directories(include)
 ament_export_dependencies(
   elog

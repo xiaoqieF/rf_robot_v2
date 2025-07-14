@@ -54,7 +54,7 @@ install(
 )
 
 ament_export_include_directories(include)
-ament_export_targets(${PROJECT_NAME})
+ament_export_targets(export_${PROJECT_NAME})
 ament_export_dependencies(
   rf_robot_msgs
   elog
