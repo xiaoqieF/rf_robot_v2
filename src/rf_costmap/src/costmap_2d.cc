@@ -78,6 +78,17 @@ void Costmap2D::copyMapRegion(uint8_t* src, unsigned int src_lower_left_x, unsig
     }
 }
 
+void Costmap2D::resetMap(unsigned int x0, unsigned int y0, unsigned int xn, unsigned int yn)
+{
+    if (x0 >= size_x_ || y0 >= size_y_ || xn >= size_x_ || yn >= size_y_) {
+        return; // Out of bounds
+    }
+
+    for (unsigned int j = y0; j <= yn; ++j) {
+        memset(costmap_data_.get() + getIndex(x0, j), default_value_, xn - x0 + 1);
+    }
+}
+
 uint8_t Costmap2D::getCost(unsigned int mx, unsigned int my) const
 {
     return costmap_data_[getIndex(mx, my)];
@@ -106,6 +117,25 @@ bool Costmap2D::worldToMap(double wx, double wy, unsigned int &mx, unsigned int 
         return false; // Point is out of bounds
     }
     return true;
+}
+
+void Costmap2D::worldToMapEnforceBounds(double wx, double wy, unsigned int &mx, unsigned int &my) const
+{
+    if (wx < origin_x_) {
+        mx = 0;
+    } else if (wx >= origin_x_ + size_x_ * resolution_) {
+        mx = size_x_ - 1;
+    } else {
+        mx = static_cast<unsigned int>((wx - origin_x_) / resolution_);
+    }
+
+    if (wy < origin_y_) {
+        my = 0;
+    } else if (wy >= origin_y_ + size_y_ * resolution_) {
+        my = size_y_ - 1;
+    } else {
+        my = static_cast<unsigned int>((wy - origin_y_) / resolution_);
+    }
 }
 
 void Costmap2D::updateOrigin(double new_origin_x, double new_origin_y)
@@ -142,6 +172,18 @@ void Costmap2D::updateOrigin(double new_origin_x, double new_origin_y)
     // Copy the overlap region back to the costmap
     copyMapRegion(overlap.get(), 0, 0, new_size_x, costmap_data_.get(),
     start_x, start_y, size_x_, new_size_x, new_size_y);
+}
+
+void Costmap2D::resizeMap(unsigned int size_x, unsigned int size_y,
+    double resolution, double origin_x, double origin_y)
+{
+    resolution_ = resolution;
+    origin_x_ = origin_x;
+    origin_y_ = origin_y;
+    size_x_ = size_x;
+    size_y_ = size_y;
+    costmap_data_ = std::make_unique<uint8_t[]>(size_x_ * size_y_);
+    memset(costmap_data_.get(), default_value_, size_x_ * size_y_);
 }
 
 }

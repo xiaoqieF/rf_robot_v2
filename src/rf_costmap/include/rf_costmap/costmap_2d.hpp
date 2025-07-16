@@ -27,15 +27,24 @@ public:
 
     ~Costmap2D() = default;
 
+    void resetMap(unsigned int x0, unsigned int y0, unsigned int xn, unsigned int yn);
     uint8_t getCost(unsigned int mx, unsigned int my) const;
     void setCost(unsigned int mx, unsigned int my, uint8_t cost);
     void mapToWorld(unsigned int mx, unsigned int my, double &wx, double &wy) const;
     bool worldToMap(double wx, double wy, unsigned int &mx, unsigned int &my) const;
+    void worldToMapEnforceBounds(double wx, double wy, unsigned int &mx, unsigned int &my) const;
     void updateOrigin(double origin_x, double origin_y);
+    void resizeMap(unsigned int size_x, unsigned int size_y,
+        double resolution, double origin_x, double origin_y);
 
     inline unsigned int getIndex(unsigned int mx, unsigned int my) const
     {
         return my * size_x_ + mx;
+    }
+
+    uint8_t* getCostmapData() const
+    {
+        return costmap_data_.get();
     }
 
     unsigned int getSizeX() const { return size_x_; }
