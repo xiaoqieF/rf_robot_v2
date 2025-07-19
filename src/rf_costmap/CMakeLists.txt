@@ -29,6 +29,10 @@ add_library(${PROJECT_NAME} SHARED
   src/costmap_2d.cc
   src/layer.cc
   src/costmap_layer.cc
+  src/master_costmap.cc
+  src/static_layer.cc
+  src/costmap_interface.cc
+  src/costmap_publisher.cc
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

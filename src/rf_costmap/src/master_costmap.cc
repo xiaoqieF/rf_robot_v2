@@ -20,6 +20,7 @@ void MasterCostmap::addLayer(std::shared_ptr<Layer> layer)
 {
     layers_.push_back(layer);
 }
+
 void MasterCostmap::resizeMap(unsigned int size_x, unsigned int size_y,
     double resolution, double origin_x, double origin_y)
 {
