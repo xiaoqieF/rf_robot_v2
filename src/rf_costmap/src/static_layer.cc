@@ -1,7 +1,9 @@
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "rf_costmap/static_layer.hpp"
 #include "rf_costmap/cost_values.hpp"
 #include "rf_costmap/master_costmap.hpp"
 #include <elog/elog.h>
+#include <tf2/LinearMath/Transform.hpp>
 
 namespace rf_costmap
 {

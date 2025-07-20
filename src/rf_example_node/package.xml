@@ -12,6 +12,9 @@
   <depend>rf_robot_msgs</depend>
   <depend>elog</depend>
   <depend>rf_util</depend>
+  <depend>rf_costmap</depend>
+  <depend>tf2</depend>
+  <depend>tf2_geometry_msgs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

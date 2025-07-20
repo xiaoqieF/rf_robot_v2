@@ -13,6 +13,9 @@ find_package(ament_cmake REQUIRED)
 find_package(rf_robot_msgs REQUIRED)
 find_package(elog REQUIRED)
 find_package(rf_util REQUIRED)
+find_package(rf_costmap REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -37,6 +40,9 @@ ament_target_dependencies(rf_example_node
   rf_robot_msgs
   elog
   rf_util
+  rf_costmap
+  tf2
+  tf2_geometry_msgs
 )
 
 install(TARGETS rf_example_node

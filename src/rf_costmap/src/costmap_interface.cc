@@ -1,11 +1,12 @@
 #include "elog/elog.h"
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "tf2/utils.h"
 #include "rf_costmap/costmap_interface.hpp"
 #include "rf_costmap/static_layer.hpp"
 #include "rf_util/execution_timer.hpp"
 #include "rf_util/robot_utils.hpp"
+#include "tf2/utils.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 namespace rf_costmap
 {
@@ -67,7 +68,7 @@ void CostmapInterface::mapUpdateLoop()
         timer.tick();
         updateMap();
         timer.toc();
-        elog::info("Costmap update took {} ms",
+        elog::debug("Costmap update took {} ms",
             std::chrono::duration_cast<std::chrono::milliseconds>(timer.elapsed()).count());
 
         // Pub costmap
@@ -75,7 +76,10 @@ void CostmapInterface::mapUpdateLoop()
         if (now - last_publish_time_ >= pub_duration) {
             costmap_publisher_->publishCostmap();
             last_publish_time_ = now;
+            elog::debug("Costmap published at {}", rclcpp::Clock().now().seconds());
         }
+
+        rate.sleep();
     }
 }
 

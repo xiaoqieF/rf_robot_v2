@@ -12,6 +12,8 @@ find_package(elog REQUIRED)
 find_package(rf_util REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -44,6 +46,9 @@ ament_target_dependencies(${PROJECT_NAME}
   rf_util
   nav_msgs
   rclcpp
+  tf2
+  geometry_msgs
+  tf2_geometry_msgs
 )
 
 install(
@@ -67,6 +72,9 @@ ament_export_dependencies(
   rf_util
   nav_msgs
   rclcpp
+  tf2
+  geometry_msgs
+  tf2_geometry_msgs
 )
 
 ament_package()
