@@ -32,7 +32,7 @@ void CostmapInterface::init()
     for (const auto& layer_name : config_.layer_names) {
         elog::info("Adding layer: {}", layer_name);
         if (layer_name == "static_layer") {
-            auto layer = std::make_shared<StaticLayer>("map");
+            auto layer = std::make_shared<StaticLayer>();
             layer->initialize(layer_name, node_, master_costmap_.get());
             master_costmap_->addLayer(layer);
         } else {

@@ -10,6 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -17,10 +18,13 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CostmapMetaData.msg"
   "msg/Costmap.msg"
   "srv/Add.srv"
+  "srv/DumpMap.srv"
+  "srv/GetMap.srv"
   DEPENDENCIES
   builtin_interfaces
   std_msgs
   geometry_msgs
+  nav_msgs
 )
 
 if(BUILD_TESTING)

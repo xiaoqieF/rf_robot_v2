@@ -13,7 +13,7 @@ namespace rf_costmap
 class StaticLayer : public CostmapLayer
 {
 public:
-    StaticLayer(const std::string& map_topic) : CostmapLayer(), map_topic_(map_topic) {}
+    StaticLayer() = default;
     void onInitialize() override;
     void reset() override;
     void updateBounds(double robot_x, double robot_y, double robot_yaw,
@@ -32,7 +32,6 @@ private:
     static constexpr uint8_t UNKNOWN_COST_VALUE = 255;
     static constexpr uint8_t LETHAL_THRESHOLD = 100;
 
-    std::string map_topic_{"map"};
     std::atomic_bool map_received_{false};
     std::mutex map_mutex_;
     nav_msgs::msg::OccupancyGrid::SharedPtr map_buffer_{nullptr};
