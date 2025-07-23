@@ -17,6 +17,8 @@ std::unique_ptr<nav_msgs::msg::OccupancyGrid> CostmapPublisher::prepareGrid()
 {
     auto grid_msg = std::make_unique<nav_msgs::msg::OccupancyGrid>();
     grid_msg->header.frame_id = "map"; // Set the frame_id as needed
+    grid_msg->header.stamp = node_->now();
+
     grid_msg->info.resolution = costmap_->getResolution();
     grid_msg->info.width = costmap_->getSizeX();
     grid_msg->info.height = costmap_->getSizeY();

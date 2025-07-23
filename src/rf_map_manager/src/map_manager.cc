@@ -35,7 +35,7 @@ MapManager::MapManager(rclcpp::Node::SharedPtr node,
 void MapManager::reloadMap()
 {
     std::string meta_data_file = map_dir_ + "/" + occ_file_name + ".yaml";
-    YAML::Node doc = YAML::LoadFile(map_dir_ + "/" + meta_data_file);
+    YAML::Node doc = YAML::LoadFile(meta_data_file);
 
     double resolution = 0.0;
     std::string image_file_name;
@@ -98,6 +98,9 @@ void MapManager::reloadMap()
             }
         }
     }
+
+    grid.header.frame_id = "map";
+    grid.header.stamp = node_->now();
 
   cached_map_ = std::make_shared<OccupancyGridMsgT>(grid);
 }

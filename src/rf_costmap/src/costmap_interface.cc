@@ -60,7 +60,8 @@ void CostmapInterface::mapUpdateLoop()
 {
     rclcpp::Rate rate(config_.update_rate);
     running_ = true;
-    auto pub_duration = std::chrono::duration<double>(1.0 / config_.publish_rate);
+    auto pub_duration_ticks = std::max(1u, config_.update_rate / config_.publish_rate);
+    uint64_t tick = 0;
 
     while (rclcpp::ok() && running_) {
         rf_util::ExecutionTimer timer;
@@ -73,13 +74,14 @@ void CostmapInterface::mapUpdateLoop()
 
         // Pub costmap
         auto now = std::chrono::steady_clock::now();
-        if (now - last_publish_time_ >= pub_duration) {
+        if (tick % pub_duration_ticks == 0) {
             costmap_publisher_->publishCostmap();
             last_publish_time_ = now;
             elog::debug("Costmap published at {}", rclcpp::Clock().now().seconds());
         }
 
         rate.sleep();
+        ++ tick;
     }
 }
 

@@ -49,13 +49,15 @@ target_include_directories(${PROJECT_NAME} PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
+target_include_directories(${PROJECT_NAME} PUBLIC ${YAML_CPP_INCLUDE_DIR})
+target_link_libraries(${PROJECT_NAME} yaml-cpp)
+
 ament_target_dependencies(${PROJECT_NAME}
   rf_robot_msgs
   elog
   rf_util
   nav_msgs
   rclcpp
-  yaml-cpp
   OpenCV
 )
 
@@ -67,8 +69,9 @@ ament_export_dependencies(
   rf_util
   nav_msgs
   rclcpp
-  yaml-cpp
   OpenCV
 )
+
+add_subdirectory(test)
 
 ament_package()
