@@ -2,7 +2,6 @@
 #include "rf_costmap/static_layer.hpp"
 #include "rf_costmap/cost_values.hpp"
 #include "rf_costmap/master_costmap.hpp"
-#include <elog/elog.h>
 #include <tf2/LinearMath/Transform.hpp>
 
 namespace rf_costmap
@@ -56,7 +55,7 @@ void StaticLayer::processMap(const nav_msgs::msg::OccupancyGrid::SharedPtr& msg)
 {
     auto size_x = msg->info.width;
     auto size_y = msg->info.height;
-    elog::debug("Processing static map with size: {}x{}", size_x, size_y);
+    COSTMAP_INFO("Processing static map with size: {}x{}", size_x, size_y);
 
     if (!master_costmap_->isRollingWindow()) {
         auto master = master_costmap_->getCostmap();
@@ -64,7 +63,7 @@ void StaticLayer::processMap(const nav_msgs::msg::OccupancyGrid::SharedPtr& msg)
             || master->getResolution() != msg->info.resolution
             || master->getOriginX() != msg->info.origin.position.x
             || master->getOriginY() != msg->info.origin.position.y) {
-            elog::warn("Static map size or resolution has changed, resizing master costmap.");
+            COSTMAP_WARN("Static map size or resolution has changed, resizing master costmap.");
             // Resize master costmap will call all layers' matchSize
             master_costmap_->resizeMap(size_x, size_y, msg->info.resolution,
                 msg->info.origin.position.x, msg->info.origin.position.y);
@@ -75,7 +74,7 @@ void StaticLayer::processMap(const nav_msgs::msg::OccupancyGrid::SharedPtr& msg)
             || costmap_->getResolution() != msg->info.resolution
             || costmap_->getOriginX() != msg->info.origin.position.x
             || costmap_->getOriginY() != msg->info.origin.position.y) {
-            elog::warn("Static map size or resolution has changed, resizing static layer.");
+            COSTMAP_WARN("Static map size or resolution has changed, resizing static layer.");
             costmap_->resizeMap(size_x, size_y, msg->info.resolution,
                 msg->info.origin.position.x, msg->info.origin.position.y);
         }

@@ -1,6 +1,6 @@
 #include "rf_costmap/master_costmap.hpp"
 #include "rf_costmap/layer.hpp"
-#include "elog/elog.h"
+#include "rf_costmap/cost_values.hpp"
 
 namespace rf_costmap
 {
@@ -50,7 +50,7 @@ void MasterCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
         double prev_max_y = max_y;
         layer->updateBounds(robot_x, robot_y, robot_yaw, &min_x, &min_y, &max_x, &max_y);
         if (min_x > prev_min_x || min_y > prev_min_y || max_x < prev_max_x || max_y < prev_max_y) {
-            elog::warn("Layer {} bounds are not consistent with previous bounds.", layer->getName());
+            COSTMAP_WARN("Layer {} bounds are not consistent with previous bounds.", layer->getName());
         }
     }
 

@@ -1,11 +1,11 @@
 #include "rf_map_manager/map_manager.hpp"
+#include "rf_map_manager/common.hpp"
 #include "geometry_msgs/msg/quaternion.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "tf2/LinearMath/Quaternion.hpp"
 #include "tf2/LinearMath/Matrix3x3.hpp"
 #include "opencv2/opencv.hpp"
 #include "yaml-cpp/yaml.h"
-#include "elog/elog.h"
 
 #include <cstdint>
 #include <fstream>
@@ -60,18 +60,18 @@ void MapManager::reloadMap()
         mode = doc["mode"].as<std::string>();
         negate = doc["negate"].as<int>();
 
-        elog::info("Reload map yaml: {}, resolotion: {}, "
+        MAP_MANAGER_INFO("Reload map yaml: {}, resolotion: {}, "
             "origin[0]: {}, origin[1]: {}, origin[2]: {}, fresh_thresh: {}, occupied_thresh: {}",
             meta_data_file, resolution, origin[0], origin[1], origin[2], free_thresh, occupied_thresh);
     } catch (YAML::Exception& e) {
-        elog::error("Failed to parse YAML: {}", meta_data_file);
+        MAP_MANAGER_WARN("Failed to parse YAML: {}", meta_data_file);
         return;
     }
 
     // Read map data
     cv::Mat img = cv::imread(image_file_name, cv::IMREAD_UNCHANGED);
     if (img.empty()) {
-        elog::error("Failed to load map image: {}", image_file_name);
+        MAP_MANAGER_WARN("Failed to load map image: {}", image_file_name);
         return;
     }
     OccupancyGridMsgT grid;
@@ -135,13 +135,13 @@ bool MapManager::dumpMap(const OccupancyGridMsgT& map)
     }
 
     cv::imwrite(map_data_file, image);
-    elog::info("Write map_data into {}", map_data_file);
+    MAP_MANAGER_INFO("Write map_data into {}", map_data_file);
 
     // To dump param yaml
     std::string meta_data_file = map_dir_ + "/" + occ_file_name + ".yaml";
     std::ofstream yaml(meta_data_file);
     if (!yaml.is_open()) {
-        elog::error("Cant not open file: {}", meta_data_file);
+        MAP_MANAGER_WARN("Cant not open file: {}", meta_data_file);
         return false;
     }
     geometry_msgs::msg::Quaternion orientation = map.info.origin.orientation;
@@ -162,20 +162,20 @@ bool MapManager::dumpMap(const OccupancyGridMsgT& map)
     e << YAML::Key << "free_thresh" << YAML::Value << free_thresh;
 
     if (!e.good()) {
-        elog::error("Yaml writer failed with an error: {}", e.GetLastError());
+        MAP_MANAGER_WARN("Yaml writer failed with an error: {}", e.GetLastError());
         return false;
     }
 
     yaml << e.c_str();
     yaml.flush();
     yaml.close();
-    elog::info("map meta data saved: {}", meta_data_file);
+    MAP_MANAGER_INFO("map meta data saved: {}", meta_data_file);
     return true;
 }
 
 void MapManager::publishMap()
 {
-    elog::info("publish occ map.");
+    MAP_MANAGER_INFO("publish occ map.");
     if (!cached_map_) {
         reloadMap();
     }
@@ -189,7 +189,7 @@ void MapManager::publishMap()
 void MapManager::handleGetMapService(const std::shared_ptr<GetMapSrvT::Request>,
                             std::shared_ptr<GetMapSrvT::Response> response)
 {
-    elog::info("handleGetMap request.");
+    MAP_MANAGER_INFO("handleGetMap request.");
     if (!cached_map_) {
         reloadMap();
     }

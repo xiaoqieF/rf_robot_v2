@@ -1,6 +1,5 @@
-#include "elog/elog.h"
-
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "rf_costmap/cost_values.hpp"
 #include "rf_costmap/costmap_interface.hpp"
 #include "rf_costmap/static_layer.hpp"
 #include "rf_util/execution_timer.hpp"
@@ -19,7 +18,7 @@ CostmapInterface::CostmapInterface(rclcpp::Node::SharedPtr node, const CostmapCo
 
 void CostmapInterface::init()
 {
-    elog::info("Initializing Costmap Interface map_name: {}", config_.map_name);
+    COSTMAP_INFO("Initializing Costmap Interface map_name: {}", config_.map_name);
 
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -30,20 +29,20 @@ void CostmapInterface::init()
         config_.resolution, 0.0, 0.0);
 
     for (const auto& layer_name : config_.layer_names) {
-        elog::info("Adding layer: {}", layer_name);
+        COSTMAP_INFO("Adding layer: {}", layer_name);
         if (layer_name == "static_layer") {
             auto layer = std::make_shared<StaticLayer>();
-            layer->initialize(layer_name, node_, master_costmap_.get());
+            layer->initialize(layer_name, node_, master_costmap_.get(), tf_buffer_.get());
             master_costmap_->addLayer(layer);
         } else {
-            elog::warn("Layer {} is not recognized or not implemented.", layer_name);
+            COSTMAP_WARN("Layer {} is not recognized or not implemented.", layer_name);
         }
     }
 }
 
 void CostmapInterface::stop()
 {
-    elog::info("Stopping Costmap Interface map_name: {}", config_.map_name);
+    COSTMAP_INFO("Stopping Costmap Interface map_name: {}", config_.map_name);
     running_ = false;
     if (map_update_thread_.joinable()) {
         map_update_thread_.join();
@@ -52,7 +51,7 @@ void CostmapInterface::stop()
 
 void CostmapInterface::start()
 {
-    elog::info("Starting Costmap Interface map_name: {}", config_.map_name);
+    COSTMAP_INFO("Starting Costmap Interface map_name: {}", config_.map_name);
     map_update_thread_ = std::thread(&CostmapInterface::mapUpdateLoop, this);
 }
 
@@ -69,7 +68,7 @@ void CostmapInterface::mapUpdateLoop()
         timer.tick();
         updateMap();
         timer.toc();
-        elog::debug("Costmap update took {} ms",
+        COSTMAP_INFO("Costmap update took {} ms",
             std::chrono::duration_cast<std::chrono::milliseconds>(timer.elapsed()).count());
 
         // Pub costmap
@@ -77,7 +76,7 @@ void CostmapInterface::mapUpdateLoop()
         if (tick % pub_duration_ticks == 0) {
             costmap_publisher_->publishCostmap();
             last_publish_time_ = now;
-            elog::debug("Costmap published at {}", rclcpp::Clock().now().seconds());
+            COSTMAP_INFO("Costmap published at {}", rclcpp::Clock().now().seconds());
         }
 
         rate.sleep();

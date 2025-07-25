@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <tf2_ros/buffer.h>
 
 #include "rclcpp/rclcpp.hpp"
 
@@ -17,7 +18,8 @@ public:
     virtual ~Layer() = default;
     virtual void initialize(const std::string& name,
         rclcpp::Node::SharedPtr node,
-        MasterCostmap* master_costmap);
+        MasterCostmap* master_costmap,
+        tf2_ros::Buffer* tf_buffer);
     virtual void reset() = 0;
     virtual void updateBounds(double robot_x, double robot_y, double robot_yaw,
                              double* min_x, double* min_y, double* max_x, double* max_y) = 0;
@@ -34,6 +36,7 @@ protected:
     std::string name_;
     rclcpp::Node::SharedPtr node_;
     MasterCostmap* master_costmap_;
+    tf2_ros::Buffer* tf_buffer_;
 };
 
 } // namespace rf_costmap
