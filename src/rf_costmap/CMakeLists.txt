@@ -16,6 +16,7 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
+find_package(laser_geometry REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -38,6 +39,7 @@ add_library(${PROJECT_NAME} SHARED
   src/costmap_interface.cc
   src/costmap_publisher.cc
   src/observation_buffer.cc
+  src/obstacle_layer.cc
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -54,6 +56,7 @@ ament_target_dependencies(${PROJECT_NAME}
   tf2_geometry_msgs
   sensor_msgs
   tf2_sensor_msgs
+  laser_geometry
 )
 
 install(
@@ -82,6 +85,7 @@ ament_export_dependencies(
   tf2_geometry_msgs
   sensor_msgs
   tf2_sensor_msgs
+  laser_geometry
 )
 
 ament_package()

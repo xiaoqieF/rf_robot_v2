@@ -65,6 +65,7 @@ void CostmapInterface::mapUpdateLoop()
     while (rclcpp::ok() && running_) {
         rf_util::ExecutionTimer timer;
 
+        // Update map
         timer.tick();
         updateMap();
         timer.toc();

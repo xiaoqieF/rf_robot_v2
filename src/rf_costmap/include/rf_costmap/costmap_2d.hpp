@@ -36,6 +36,7 @@ public:
     void updateOrigin(double origin_x, double origin_y);
     void resizeMap(unsigned int size_x, unsigned int size_y,
         double resolution, double origin_x, double origin_y);
+    void raytraceLine(unsigned int mx0, unsigned int my0, unsigned int mx1, unsigned int my1, uint8_t value);
 
     inline unsigned int getIndex(unsigned int mx, unsigned int my) const
     {

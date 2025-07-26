@@ -186,4 +186,40 @@ void Costmap2D::resizeMap(unsigned int size_x, unsigned int size_y,
     memset(costmap_data_.get(), default_value_, size_x_ * size_y_);
 }
 
+void Costmap2D::raytraceLine(unsigned int mx0, unsigned int my0, unsigned int mx1, unsigned int my1, uint8_t value)
+{
+    int dx = std::abs((int)mx1 - (int)mx0);
+    int dy = std::abs((int)my1 - (int)my0);
+
+    int sx = (mx0 < mx1) ? 1 : -1;
+    int sy = (my0 < my1) ? 1 : -1;
+
+    int err = dx - dy;
+
+    int x = mx0;
+    int y = my0;
+
+    while (true) {
+        if (x >= 0 && x < (int)size_x_ && y >= 0 && y < (int)size_y_) {
+            setCost(x, y, value);
+        }
+
+        if (x == (int)mx1 && y == (int)my1) {
+            break;
+        }
+
+        int e2 = 2 * err;
+
+        if (e2 > -dy) {
+            err -= dy;
+            x += sx;
+        }
+
+        if (e2 < dx) {
+            err += dx;
+            y += sy;
+        }
+    }
+}
+
 }
