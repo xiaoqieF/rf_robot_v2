@@ -2,8 +2,10 @@
 
 #include "rf_robot_msgs/msg/costmap.hpp"
 #include "rf_costmap/costmap_2d.hpp"
-#include <memory>
 #include <rclcpp/node.hpp>
+
+#include <cstdint>
+#include <memory>
 #include <string>
 
 namespace rf_costmap
@@ -22,6 +24,7 @@ private:
     std::unique_ptr<rf_robot_msgs::msg::Costmap> prepareCostmap();
 
 private:
+    std::unique_ptr<int8_t[]> cost_trans_table_{nullptr};
     rclcpp::Node::SharedPtr node_;
     std::string topic_name_;
     Costmap2D* costmap_;

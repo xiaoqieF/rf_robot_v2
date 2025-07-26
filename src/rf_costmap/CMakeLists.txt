@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.8)
 project(rf_costmap)
 
+set(CMAKE_BUILD_TYPE Debug)
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -87,5 +89,7 @@ ament_export_dependencies(
   tf2_sensor_msgs
   laser_geometry
 )
+
+add_subdirectory(test)
 
 ament_package()

@@ -24,6 +24,7 @@ void StaticLayer::reset()
 void StaticLayer::mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
 {
     map_received_ = true;
+    COSTMAP_INFO("Received static map. Size: {} x {}", msg->info.width, msg->info.height);
     std::lock_guard<std::mutex> lock(map_mutex_);
     map_buffer_ = msg;
 }
@@ -144,7 +145,7 @@ void StaticLayer::updateCosts(Costmap2D& master_grid,
                 unsigned int mx, my;
                 master_costmap_->getCostmap()->mapToWorld(i, j, wx, wy);
                 if (costmap_->worldToMap(wx, wy, mx, my)) {
-                    master_grid.setCost(mx, my, costmap_->getCost(i, j));
+                    master_grid.setCost(i, j, costmap_->getCost(mx, my));
                 }
             }
         }

@@ -25,7 +25,8 @@ void CostmapInterface::init()
 
     costmap_publisher_ = std::make_unique<CostmapPublisher>(node_, config_.map_name, master_costmap_->getCostmap());
 
-    master_costmap_->resizeMap(config_.width, config_.height,
+    master_costmap_->resizeMap(static_cast<unsigned int>(config_.width / config_.resolution),
+        static_cast<unsigned int>(config_.height / config_.resolution),
         config_.resolution, 0.0, 0.0);
 
     for (const auto& layer_name : config_.layer_names) {

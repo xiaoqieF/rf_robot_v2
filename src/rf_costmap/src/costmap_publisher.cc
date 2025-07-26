@@ -11,6 +11,17 @@ CostmapPublisher::CostmapPublisher(rclcpp::Node::SharedPtr node,
 {
     publisher_ = node_->create_publisher<nav_msgs::msg::OccupancyGrid>(topic_name_, rclcpp::QoS(1));
     raw_publisher_ = node_->create_publisher<rf_robot_msgs::msg::Costmap>(topic_name_ + "_raw", rclcpp::QoS(1));
+
+    if (!cost_trans_table_) {
+        cost_trans_table_ = std::make_unique<int8_t[]>(256);
+        cost_trans_table_[0] = 0;
+        cost_trans_table_[253] = 99;
+        cost_trans_table_[254] = 100;
+        cost_trans_table_[255] = -1;
+        for (int i = 1; i < 253; i++) {
+            cost_trans_table_[i] = static_cast<uint8_t>(1 + (97 * (i - 1) / 251));
+        }
+    }
 }
 
 std::unique_ptr<nav_msgs::msg::OccupancyGrid> CostmapPublisher::prepareGrid()
@@ -30,7 +41,7 @@ std::unique_ptr<nav_msgs::msg::OccupancyGrid> CostmapPublisher::prepareGrid()
 
     for (unsigned int i = 0; i < costmap_->getSizeX(); ++i) {
         for (unsigned int j = 0; j < costmap_->getSizeY(); ++j) {
-            grid_msg->data[costmap_->getIndex(i, j)] = costmap_->getCost(i, j);
+            grid_msg->data[costmap_->getIndex(i, j)] = cost_trans_table_[costmap_->getCost(i, j)];
         }
     }
 
