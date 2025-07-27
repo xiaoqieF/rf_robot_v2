@@ -1,11 +1,14 @@
-#include "geometry_msgs/msg/pose_stamped.hpp"
 #include "rf_costmap/cost_values.hpp"
 #include "rf_costmap/costmap_interface.hpp"
 #include "rf_costmap/static_layer.hpp"
+#include "rf_costmap/obstacle_layer.hpp"
 #include "rf_util/execution_timer.hpp"
 #include "rf_util/robot_utils.hpp"
+
 #include "tf2/utils.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include <tf2_ros/create_timer_ros.h>
 
 namespace rf_costmap
 {
@@ -21,6 +24,12 @@ void CostmapInterface::init()
     COSTMAP_INFO("Initializing Costmap Interface map_name: {}", config_.map_name);
 
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
+    auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>(
+        node_->get_node_base_interface(),
+        node_->get_node_timers_interface()
+    );
+    tf_buffer_->setCreateTimerInterface(timer_interface);
+
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
     costmap_publisher_ = std::make_unique<CostmapPublisher>(node_, config_.map_name, master_costmap_->getCostmap());
@@ -33,6 +42,10 @@ void CostmapInterface::init()
         COSTMAP_INFO("Adding layer: {}", layer_name);
         if (layer_name == "static_layer") {
             auto layer = std::make_shared<StaticLayer>();
+            layer->initialize(layer_name, node_, master_costmap_.get(), tf_buffer_.get());
+            master_costmap_->addLayer(layer);
+        }else if (layer_name == "obstacle_layer") {
+            auto layer = std::make_shared<ObstacleLayer>();
             layer->initialize(layer_name, node_, master_costmap_.get(), tf_buffer_.get());
             master_costmap_->addLayer(layer);
         } else {

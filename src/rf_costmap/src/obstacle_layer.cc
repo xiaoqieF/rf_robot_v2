@@ -117,8 +117,8 @@ void ObstacleLayer::raytraceFreespace(const Observation& obs,
 
     unsigned int x0, y0;
     if (!costmap_->worldToMap(origin_x, origin_y, x0, y0)) {
-        COSTMAP_WARN("Raytrace freespace origin ({.2f}, {.2f}) is out of bounds"
-            "({.2f}, {.2f}) - ({.2f, .2f})"
+        COSTMAP_WARN("Raytrace freespace origin ({:.2f}, {:.2f}) is out of bounds"
+            "({:.2f}, {:.2f}) - ({:.2f}, {:.2f})"
             , origin_x, origin_y, map_origin_x, map_origin_y,
             map_end_x, map_end_y);
         return;
@@ -136,13 +136,13 @@ void ObstacleLayer::raytraceFreespace(const Observation& obs,
         double b = wy - origin_y;
 
         // To kepp the ray within the map
-        if (wx < origin_x) {
+        if (wx < map_origin_x) {
             double t = (map_origin_x - origin_x) / a;
             wx = map_origin_x;
             wy = origin_y + t * b;
         }
 
-        if (wy < origin_y) {
+        if (wy < map_origin_y) {
             double t = (map_origin_y - origin_y) / b;
             wx = origin_x + t * a;
             wy = map_origin_y;
@@ -172,30 +172,30 @@ void ObstacleLayer::raytraceFreespace(const Observation& obs,
         unsigned final_x0 = x0;
         unsigned final_y0 = y0;
 
-        if (obs.raytrace_min_range > 1e-3) {
-            double t = obs.raytrace_min_range / full_dist;
-            double final_origin_x = origin_x + t * full_x;
-            double final_origin_y = origin_y + t * full_y;
+        // if (obs.raytrace_min_range > 1e-3) {
+        //     double t = obs.raytrace_min_range / full_dist;
+        //     double final_origin_x = origin_x + t * full_x;
+        //     double final_origin_y = origin_y + t * full_y;
 
-            if (!costmap_->worldToMap(final_origin_x, final_origin_y, final_x0, final_y0)) {
-                COSTMAP_WARN("Raytrace freespace min range point ({.2f}, {.2f}) is out of bounds"
-                    "({.2f}, {.2f}) - ({.2f, .2f}), which should not happen."
-                    , final_origin_x, final_origin_y, map_origin_x, map_origin_y,
-                    map_end_x, map_end_y);
-                continue;
-            }
-        }
+        //     if (!costmap_->worldToMap(final_origin_x, final_origin_y, final_x0, final_y0)) {
+        //         COSTMAP_WARN("Raytrace freespace min range point ({:.2f}, {:.2f}) is out of bounds"
+        //             "({:.2f}, {:.2f}) - ({:.2f}, {:.2f}), which should not happen."
+        //             , final_origin_x, final_origin_y, map_origin_x, map_origin_y,
+        //             map_end_x, map_end_y);
+        //         continue;
+        //     }
+        // }
 
-        if (full_dist > obs.raytrace_max_range) {
-            double t = obs.raytrace_max_range / full_dist;
-            wx = origin_x + t * full_x;
-            wy = origin_y + t * full_y;
-        }
+        // if (full_dist > obs.raytrace_max_range) {
+        //     double t = obs.raytrace_max_range / full_dist;
+        //     wx = origin_x + t * full_x;
+        //     wy = origin_y + t * full_y;
+        // }
 
         unsigned int x1, y1;
         if (!costmap_->worldToMap(wx, wy, x1, y1)) {
-            COSTMAP_WARN("Raytrace freespace point ({.2f}, {.2f}) is out of bounds"
-                "({.2f}, {.2f}) - ({.2f, .2f}), which should not happen."
+            COSTMAP_WARN("Raytrace freespace point ({:.2f}, {:.2f}) is out of bounds"
+                "({:.2f}, {:.2f}) - ({:.2f}, {:.2f}), which should not happen."
                 , wx, wy, map_origin_x, map_origin_y,
                 map_end_x, map_end_y);
             continue;

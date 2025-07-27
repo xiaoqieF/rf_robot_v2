@@ -66,7 +66,6 @@ void ObservationBuffer::bufferCloud(const sensor_msgs::msg::PointCloud2& cloud)
         new_observation.cloud->fields = global_cloud.fields;
         new_observation.cloud->point_step = global_cloud.point_step;
         new_observation.cloud->row_step = global_cloud.row_step;
-
         // Remove points that are too low or too high
         unsigned int cloud_size = global_cloud.width * global_cloud.height;
         sensor_msgs::PointCloud2Modifier modifier(*new_observation.cloud);
@@ -76,7 +75,7 @@ void ObservationBuffer::bufferCloud(const sensor_msgs::msg::PointCloud2& cloud)
         sensor_msgs::PointCloud2Iterator<float> iter_z(global_cloud, "z");
         auto iter_global = global_cloud.data.begin();
         auto iter_end = global_cloud.data.end();
-        auto iter_valid = global_cloud.data.begin();
+        auto iter_valid = new_observation.cloud->data.begin();
         for (; iter_global != iter_end; ++ iter_z, iter_global += global_cloud.point_step) {
             if ((*iter_z) <= max_obstacle_height && (*iter_z) >= min_obstacle_height) {
                 std::copy(iter_global, iter_global + global_cloud.point_step, iter_valid);

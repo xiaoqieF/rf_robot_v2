@@ -370,7 +370,7 @@
 
             <!-- 运动学参数 -->
             <wheel_separation>0.2</wheel_separation>
-            <wheel_radius>0.0325</wheel_radius>
+            <wheel_radius>0.032</wheel_radius>
 
             <!-- 限制参数 -->
             <max_wheel_torque>30</max_wheel_torque>

@@ -36,12 +36,12 @@ public:
         rf_costmap::CostmapConfig config;
         config.map_name = "global_costmap";
         config.resolution = 0.05; // 5 cm resolution
-        config.width = 3; // 10 meters wide
-        config.height = 3; // 10 meters tall
-        config.rolling_window = true;
+        config.width = 5; // 10 meters wide
+        config.height = 5; // 10 meters tall
+        config.rolling_window = false;
         config.update_rate = 10; // 10 Hz
         config.publish_rate = 5; // 5 Hz
-        config.layer_names = {"static_layer"};
+        config.layer_names = {"static_layer", "obstacle_layer"};
 
         costmap_interface_ = std::make_unique<rf_costmap::CostmapInterface>(shared_from_this(), config);
         costmap_interface_->init();
