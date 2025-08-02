@@ -121,6 +121,11 @@ bool Costmap2D::worldToMap(double wx, double wy, unsigned int &mx, unsigned int 
 
 void Costmap2D::worldToMapEnforceBounds(double wx, double wy, unsigned int &mx, unsigned int &my) const
 {
+    if (size_x_ == 0 || size_y_ == 0) {
+        mx = 0;
+        my = 0;
+        return; // Empty costmap, return default values
+    }
     if (wx < origin_x_) {
         mx = 0;
     } else if (wx >= origin_x_ + size_x_ * resolution_) {

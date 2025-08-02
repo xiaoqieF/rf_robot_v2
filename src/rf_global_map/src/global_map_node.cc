@@ -24,13 +24,13 @@ void GlobalMapNode::init()
         [this](const ReqAckSrvT::Request::SharedPtr request,
                const ReqAckSrvT::Response::SharedPtr response) {
             elog::info("[GlobalMapNode] Received global map control request: {}",
-                request->trigger ? "Start" : "Stop");
-            if (request->trigger) {
+                request->trigger == request->START ? "Start" : "Stop");
+            if (request->trigger == request->START) {
                 startMapUpdate();
             } else {
                 stopMapUpdate();
             }
-            response->ack = true; // Acknowledge the request
+            response->ack = response->OK; // Acknowledge the request
         });
 }
 

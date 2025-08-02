@@ -24,6 +24,11 @@ void MasterCostmap::addLayer(std::shared_ptr<Layer> layer)
 void MasterCostmap::resizeMap(unsigned int size_x, unsigned int size_y,
     double resolution, double origin_x, double origin_y)
 {
+    if (size_x == 0 || size_y == 0 || resolution <= 0.0) {
+        COSTMAP_WARN("Invalid size or resolution for resizing costmap: size_x={}, size_y={}, resolution={}",
+            size_x, size_y, resolution);
+        return;
+    }
     combined_costmap_->resizeMap(size_x, size_y, resolution, origin_x, origin_y);
     for (const auto& layer : layers_) {
         layer->matchSize();
