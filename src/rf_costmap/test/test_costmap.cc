@@ -41,7 +41,7 @@ public:
         config.rolling_window = false;
         config.update_rate = 10; // 10 Hz
         config.publish_rate = 5; // 5 Hz
-        config.layer_names = {"static_layer", "obstacle_layer"};
+        config.layer_names = {"static_layer", "obstacle_layer","inflation_layer"};
 
         costmap_interface_ = std::make_unique<rf_costmap::CostmapInterface>(shared_from_this(), config);
         costmap_interface_->init();

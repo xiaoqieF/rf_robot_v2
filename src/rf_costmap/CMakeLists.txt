@@ -42,6 +42,7 @@ add_library(${PROJECT_NAME} SHARED
   src/costmap_publisher.cc
   src/observation_buffer.cc
   src/obstacle_layer.cc
+  src/inflation_layer.cc
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

@@ -2,6 +2,7 @@
 #include "rf_costmap/costmap_interface.hpp"
 #include "rf_costmap/static_layer.hpp"
 #include "rf_costmap/obstacle_layer.hpp"
+#include "rf_costmap/inflation_layer.hpp"
 #include "rf_util/execution_timer.hpp"
 #include "rf_util/robot_utils.hpp"
 
@@ -46,6 +47,10 @@ void CostmapInterface::init()
             master_costmap_->addLayer(layer);
         }else if (layer_name == "obstacle_layer") {
             auto layer = std::make_shared<ObstacleLayer>();
+            layer->initialize(layer_name, node_, master_costmap_.get(), tf_buffer_.get());
+            master_costmap_->addLayer(layer);
+        } else if (layer_name == "inflation_layer") {
+            auto layer = std::make_shared<InflationLayer>();
             layer->initialize(layer_name, node_, master_costmap_.get(), tf_buffer_.get());
             master_costmap_->addLayer(layer);
         } else {
