@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>rf_example_node</name>
+  <name>rf_local_map</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="fanxiaodong@buaa.edu.cn">royfan</maintainer>
@@ -11,10 +11,7 @@
 
   <depend>rf_robot_msgs</depend>
   <depend>elog</depend>
-  <depend>rf_util</depend>
   <depend>rf_costmap</depend>
-  <depend>tf2</depend>
-  <depend>tf2_geometry_msgs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

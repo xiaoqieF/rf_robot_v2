@@ -9,6 +9,7 @@
 #include "tf2/utils.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include <pthread.h>
 #include <tf2_ros/create_timer_ros.h>
 
 namespace rf_costmap
@@ -72,6 +73,8 @@ void CostmapInterface::start()
 {
     COSTMAP_INFO("Starting Costmap Interface map_name: {}", config_.map_name);
     map_update_thread_ = std::thread(&CostmapInterface::mapUpdateLoop, this);
+    pthread_setname_np(map_update_thread_.native_handle(),
+        (config_.map_name + "_update_thread").c_str());
 }
 
 void CostmapInterface::mapUpdateLoop()

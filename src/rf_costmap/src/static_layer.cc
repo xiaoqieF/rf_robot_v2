@@ -10,7 +10,7 @@ namespace rf_costmap
 void StaticLayer::onInitialize()
 {
     map_sub_ = node_->create_subscription<nav_msgs::msg::OccupancyGrid>(
-        "map", rclcpp::QoS(1),
+        "/map", rclcpp::QoS(1),
         std::bind(&StaticLayer::mapCallback, this, std::placeholders::_1));
 }
 
