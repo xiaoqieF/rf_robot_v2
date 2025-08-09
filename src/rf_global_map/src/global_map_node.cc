@@ -32,10 +32,23 @@ void GlobalMapNode::init()
             }
             response->ack = response->OK; // Acknowledge the request
         });
+
+    static_map_client_ = this->create_client<ReqAckSrvT>(
+        "/publish_static_map");
 }
 
 void GlobalMapNode::startMapUpdate()
 {
+    if (!static_map_client_->wait_for_service(std::chrono::seconds(1))) {
+        elog::error("[GlobalMapNode] Static map service is not available.");
+        return;
+    }
+
+    // Request the static map to be published
+    auto request = std::make_shared<ReqAckSrvT::Request>();
+    request->trigger = request->START;
+    auto future = static_map_client_->async_send_request(request);
+
     costmap_interface_->start();
 }
 

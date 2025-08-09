@@ -4,11 +4,11 @@
 
 namespace rf_map_manager
 {
-class MapManagerNode : public rclcpp::Node
+class MapManagerTestNode : public rclcpp::Node
 {
 public:
-    MapManagerNode()
-    : Node("map_manager_node")
+    MapManagerTestNode()
+    : Node("map_manager_test_node")
     {
     }
 
@@ -29,7 +29,7 @@ private:
 int main()
 {
     rclcpp::init(0, nullptr);
-    auto node = std::make_shared<rf_map_manager::MapManagerNode>();
+    auto node = std::make_shared<rf_map_manager::MapManagerTestNode>();
     node->init();
 
     rclcpp::spin(node);

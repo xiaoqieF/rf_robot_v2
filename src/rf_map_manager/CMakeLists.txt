@@ -29,6 +29,7 @@ endif()
 
 add_library(${PROJECT_NAME} SHARED
   src/map_manager.cc
+  src/map_manager_node.cc
 )
 
 install(

@@ -1,5 +1,6 @@
 #include "rf_global_map/global_map_node.hpp"
 #include "rf_local_map/local_map_node.hpp"
+#include "rf_map_manager/map_manager_node.hpp"
 #include "elog/elog.h"
 #include "rclcpp/rclcpp.hpp"
 
@@ -10,14 +11,17 @@ int main(int argc, char **argv)
     rclcpp::init(argc, argv);
 
     auto global_map_node = std::make_shared<rf_global_map::GlobalMapNode>();
-    auto loacal_map_node = std::make_shared<rf_local_map::LocalMapNode>();
+    auto local_map_node = std::make_shared<rf_local_map::LocalMapNode>();
+    auto map_manager_node = std::make_shared<rf_map_manager::MapManagerNode>();
 
     global_map_node->init();
-    loacal_map_node->init();
+    local_map_node->init();
+    map_manager_node->init();
 
     auto map_executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
     map_executor->add_node(global_map_node);
-    map_executor->add_node(loacal_map_node);
+    map_executor->add_node(local_map_node);
+    map_executor->add_node(map_manager_node);
 
     std::thread spin_thread1([&]() {
         map_executor->spin();
