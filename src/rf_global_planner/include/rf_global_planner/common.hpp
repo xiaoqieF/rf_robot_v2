@@ -1,5 +1,7 @@
 #pragma once
 
+#include "elog/elog.h"
+
 namespace rf_global_planner
 {
 

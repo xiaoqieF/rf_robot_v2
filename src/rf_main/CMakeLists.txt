@@ -13,6 +13,7 @@ find_package(rf_global_map REQUIRED)
 find_package(rf_local_map REQUIRED)
 find_package(rf_global_planner REQUIRED)
 find_package(rf_map_manager REQUIRED)
+find_package(rf_scheduler_node REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -37,6 +38,7 @@ ament_target_dependencies(${PROJECT_NAME}
   rf_local_map
   rf_global_planner
   rf_map_manager
+  rf_scheduler_node
 )
 
 install(

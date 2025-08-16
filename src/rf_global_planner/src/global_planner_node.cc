@@ -1,11 +1,15 @@
 #include "rf_global_planner/global_planner_node.hpp"
+#include "rf_global_planner/planner/global_planner.hpp"
 #include "rf_util/robot_utils.hpp"
-#include "geometry_msgs/msg/pose_stamped.hpp"
 #include "rf_global_planner/common.hpp"
+#include "rf_global_planner/planner/default_planner.hpp"
 #include "tf2_ros/create_timer_ros.h"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+
 #include <cstddef>
 #include <memory>
 #include <mutex>
+#include <utility>
 
 namespace rf_global_planner
 {
@@ -18,6 +22,10 @@ void GlobalPlannerNode::init()
         this->get_node_timers_interface()
     );
     tf_buffer_->setCreateTimerInterface(timer_interface);
+
+    auto default_planner = std::unique_ptr<DefaultPlanner>();
+    default_planner->init(tf_buffer_);
+    planners_.emplace("default_planner", std::move(default_planner));
 
     global_map_sub_ = this->create_subscription<CostmapMsgT>(
         "/global_costmap",
@@ -100,7 +108,34 @@ void GlobalPlannerNode::handleComputePathToPose()
         action_to_pose_server_->terminateCurrent();
         return;
     }
-    result->path = getPlan(start_pose, goal_pose, planner_id);
+    auto [err_code,cur_path] = getPlan(start_pose, goal_pose, planner_id);
+
+    if (err_code  == PlanErrorCode::PLANNER_NOT_FOUND) {
+        G_PLANNER_ERROR("Planner '{}' not found.", planner_id);
+        result->error_code = ActionThroughPoses::Result::INVALID_PLANNER;
+        action_through_poses_server_->terminateCurrent();
+        return;
+    } else if (err_code == PlanErrorCode::GOAL_OUTSIDE_BOUNDS) {
+        G_PLANNER_ERROR("Goal outside map.");
+        result->error_code = ActionThroughPoses::Result::GOAL_OUTSIDE_MAP;
+        action_through_poses_server_->terminateCurrent();
+        return;
+    } else if (err_code == PlanErrorCode::START_OUTSIDE_BOUNDS) {
+        G_PLANNER_ERROR("Start outside map.");
+        result->error_code = ActionThroughPoses::Result::START_OUTSIDE_MAP;
+        action_through_poses_server_->terminateCurrent();
+        return;
+    } else if (err_code == PlanErrorCode::GOAL_OCCUPIED) {
+        G_PLANNER_ERROR("goal occupied.");
+        result->error_code = ActionThroughPoses::Result::GOAL_OCCUPIED;
+        action_through_poses_server_->terminateCurrent();
+        return;
+    } else if (err_code != PlanErrorCode::OK) {
+        G_PLANNER_ERROR("goal occupied.");
+        result->error_code = ActionThroughPoses::Result::UNKNOWN;
+        action_through_poses_server_->terminateCurrent();
+        return;
+    }
 
     if (result->path.poses.empty()) {
         G_PLANNER_ERROR("Failed to compute path from ({:.3f}, {:.3f}) to ({:.3f}, {:.3f}) using planner: {}",
@@ -190,7 +225,34 @@ void GlobalPlannerNode::handleComputePathThroughPoses()
             return;
         }
 
-        nav_msgs::msg::Path cur_path = getPlan(cur_start, cur_goal, planner_id);
+        auto [err_code,cur_path] = getPlan(cur_start, cur_goal, planner_id);
+
+        if (err_code  == PlanErrorCode::PLANNER_NOT_FOUND) {
+            G_PLANNER_ERROR("Planner '{}' not found.", planner_id);
+            result->error_code = ActionThroughPoses::Result::INVALID_PLANNER;
+            action_through_poses_server_->terminateCurrent();
+            return;
+        } else if (err_code == PlanErrorCode::GOAL_OUTSIDE_BOUNDS) {
+            G_PLANNER_ERROR("Goal outside map.");
+            result->error_code = ActionThroughPoses::Result::GOAL_OUTSIDE_MAP;
+            action_through_poses_server_->terminateCurrent();
+            return;
+        } else if (err_code == PlanErrorCode::START_OUTSIDE_BOUNDS) {
+            G_PLANNER_ERROR("Start outside map.");
+            result->error_code = ActionThroughPoses::Result::START_OUTSIDE_MAP;
+            action_through_poses_server_->terminateCurrent();
+            return;
+        } else if (err_code == PlanErrorCode::GOAL_OCCUPIED) {
+            G_PLANNER_ERROR("goal occupied.");
+            result->error_code = ActionThroughPoses::Result::GOAL_OCCUPIED;
+            action_through_poses_server_->terminateCurrent();
+            return;
+        } else if (err_code != PlanErrorCode::OK) {
+            G_PLANNER_ERROR("goal occupied.");
+            result->error_code = ActionThroughPoses::Result::UNKNOWN;
+            action_through_poses_server_->terminateCurrent();
+            return;
+        }
 
         if (cur_path.poses.empty()) {
             G_PLANNER_ERROR("Failed to compute path from ({:.3f}, {:.3f}) to ({:.3f}, {:.3f}) using planner: {}",
@@ -227,7 +289,7 @@ bool GlobalPlannerNode::transformPoseToGlobalFrame(geometry_msgs::msg::PoseStamp
         *tf_buffer_, "map");
 }
 
-nav_msgs::msg::Path GlobalPlannerNode::getPlan(
+std::pair<PlanErrorCode, nav_msgs::msg::Path> GlobalPlannerNode::getPlan(
     const geometry_msgs::msg::PoseStamped& start,
     const geometry_msgs::msg::PoseStamped& goal,
     const std::string& planner_name)
@@ -239,7 +301,7 @@ nav_msgs::msg::Path GlobalPlannerNode::getPlan(
 
     if (planners_.find(planner_name) == planners_.end()) {
         G_PLANNER_ERROR("Planner '{}' not found.", planner_name);
-        return nav_msgs::msg::Path();
+        return std::make_pair(PlanErrorCode::PLANNER_NOT_FOUND, nav_msgs::msg::Path());
     }
 
     CostmapMsgT::SharedPtr global_costmap;

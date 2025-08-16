@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(rf_global_planner)
+project(rf_scheduler_node)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -8,10 +8,8 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rf_robot_msgs REQUIRED)
-find_package(rf_util REQUIRED)
-find_package(nav_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
 find_package(elog REQUIRED)
+find_package(rf_util REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -26,8 +24,7 @@ if(BUILD_TESTING)
 endif()
 
 add_library(${PROJECT_NAME} SHARED
-  src/global_planner_node.cc
-  src/planner/default_planner.cc
+  src/scheduler_node.cc
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -38,8 +35,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 ament_target_dependencies(${PROJECT_NAME}
   rf_robot_msgs
   rf_util
-  nav_msgs
-  geometry_msgs
   elog
 )
 
@@ -48,8 +43,6 @@ ament_export_targets(export_${PROJECT_NAME})
 ament_export_dependencies(
   rf_robot_msgs
   rf_util
-  nav_msgs
-  geometry_msgs
   elog
 )
 
@@ -65,5 +58,4 @@ install(
   DIRECTORY include/
   DESTINATION include
 )
-
 ament_package()

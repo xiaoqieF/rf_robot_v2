@@ -35,7 +35,7 @@ private:
     void handleComputePathThroughPoses();
     bool transformPoseToGlobalFrame(
         geometry_msgs::msg::PoseStamped& pose);
-    nav_msgs::msg::Path getPlan(
+    std::pair<PlanErrorCode, nav_msgs::msg::Path> getPlan(
         const geometry_msgs::msg::PoseStamped& start,
         const geometry_msgs::msg::PoseStamped& goal,
         const std::string& planner_name);
