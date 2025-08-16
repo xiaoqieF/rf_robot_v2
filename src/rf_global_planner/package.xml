@@ -10,6 +10,9 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rf_robot_msgs</depend>
+  <depend>rf_util</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
   <depend>elog</depend>
 
   <test_depend>ament_lint_auto</test_depend>

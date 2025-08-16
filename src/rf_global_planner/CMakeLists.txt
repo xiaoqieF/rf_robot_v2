@@ -8,6 +8,9 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rf_robot_msgs REQUIRED)
+find_package(rf_util REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(elog REQUIRED)
 
 if(BUILD_TESTING)
@@ -21,5 +24,45 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+add_library(${PROJECT_NAME} SHARED
+  src/global_planner_node.cc
+)
+
+target_include_directories(${PROJECT_NAME} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+ament_target_dependencies(${PROJECT_NAME}
+  rf_robot_msgs
+  rf_util
+  nav_msgs
+  geometry_msgs
+  elog
+)
+
+ament_export_include_directories(include)
+ament_export_targets(export_${PROJECT_NAME})
+ament_export_dependencies(
+  rf_robot_msgs
+  rf_util
+  nav_msgs
+  geometry_msgs
+  elog
+)
+
+install(
+  TARGETS ${PROJECT_NAME}
+  EXPORT export_${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+install(
+  DIRECTORY include/
+  DESTINATION include
+)
 
 ament_package()

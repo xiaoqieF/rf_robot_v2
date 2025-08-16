@@ -21,6 +21,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/DumpMap.srv"
   "srv/GetMap.srv"
   "srv/ReqAck.srv"
+  "action/ComputePathToPose.action"
+  "action/ComputePathThroughPoses.action"
   DEPENDENCIES
   builtin_interfaces
   std_msgs
