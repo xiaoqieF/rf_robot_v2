@@ -23,12 +23,14 @@ void GlobalPlannerNode::init()
     );
     tf_buffer_->setCreateTimerInterface(timer_interface);
 
-    auto default_planner = std::unique_ptr<DefaultPlanner>();
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+    auto default_planner = std::make_unique<DefaultPlanner>();
     default_planner->init(tf_buffer_);
     planners_.emplace("default_planner", std::move(default_planner));
 
     global_map_sub_ = this->create_subscription<CostmapMsgT>(
-        "/global_costmap",
+        "/global_costmap_raw",
         1,
         [this](const CostmapMsgT::SharedPtr msg) {
             std::lock_guard<std::mutex> lock(global_costmap_mutex_);
@@ -85,7 +87,7 @@ void GlobalPlannerNode::handleComputePathToPose()
         if (!rf_util::getCurrentPose(start_pose, *tf_buffer_)) {
             G_PLANNER_ERROR("Failed to get current pose.");
             result->error_code = ActionToPose::Result::TF_ERROR;
-            action_to_pose_server_->terminateCurrent();
+            action_to_pose_server_->terminateCurrent(result);
             return;
         }
     }
@@ -93,7 +95,7 @@ void GlobalPlannerNode::handleComputePathToPose()
     if (!transformPoseToGlobalFrame(start_pose) || !transformPoseToGlobalFrame(goal_pose)) {
         G_PLANNER_ERROR("Failed to transform poses to global frame.");
         result->error_code = ActionToPose::Result::TF_ERROR;
-        action_to_pose_server_->terminateCurrent();
+        action_to_pose_server_->terminateCurrent(result);
         return;
     }
 
@@ -105,37 +107,39 @@ void GlobalPlannerNode::handleComputePathToPose()
     if (planners_.find(planner_id) == planners_.end()) {
         G_PLANNER_ERROR("Planner '{}' not found.", planner_id);
         result->error_code = ActionToPose::Result::INVALID_PLANNER;
-        action_to_pose_server_->terminateCurrent();
+        action_to_pose_server_->terminateCurrent(result);
         return;
     }
-    auto [err_code,cur_path] = getPlan(start_pose, goal_pose, planner_id);
+    auto [err_code, cur_path] = getPlan(start_pose, goal_pose, planner_id);
 
     if (err_code  == PlanErrorCode::PLANNER_NOT_FOUND) {
         G_PLANNER_ERROR("Planner '{}' not found.", planner_id);
         result->error_code = ActionThroughPoses::Result::INVALID_PLANNER;
-        action_through_poses_server_->terminateCurrent();
+        action_to_pose_server_->terminateCurrent(result);
         return;
     } else if (err_code == PlanErrorCode::GOAL_OUTSIDE_BOUNDS) {
         G_PLANNER_ERROR("Goal outside map.");
         result->error_code = ActionThroughPoses::Result::GOAL_OUTSIDE_MAP;
-        action_through_poses_server_->terminateCurrent();
+        action_to_pose_server_->terminateCurrent(result);
         return;
     } else if (err_code == PlanErrorCode::START_OUTSIDE_BOUNDS) {
         G_PLANNER_ERROR("Start outside map.");
         result->error_code = ActionThroughPoses::Result::START_OUTSIDE_MAP;
-        action_through_poses_server_->terminateCurrent();
+        action_to_pose_server_->terminateCurrent(result);
         return;
     } else if (err_code == PlanErrorCode::GOAL_OCCUPIED) {
         G_PLANNER_ERROR("goal occupied.");
         result->error_code = ActionThroughPoses::Result::GOAL_OCCUPIED;
-        action_through_poses_server_->terminateCurrent();
+        action_to_pose_server_->terminateCurrent(result);
         return;
     } else if (err_code != PlanErrorCode::OK) {
         G_PLANNER_ERROR("goal occupied.");
         result->error_code = ActionThroughPoses::Result::UNKNOWN;
-        action_through_poses_server_->terminateCurrent();
+        action_to_pose_server_->terminateCurrent(result);
         return;
     }
+
+    result->path = cur_path;
 
     if (result->path.poses.empty()) {
         G_PLANNER_ERROR("Failed to compute path from ({:.3f}, {:.3f}) to ({:.3f}, {:.3f}) using planner: {}",
@@ -143,7 +147,7 @@ void GlobalPlannerNode::handleComputePathToPose()
             goal_pose.pose.position.x, goal_pose.pose.position.y,
             planner_id);
         result->error_code = ActionToPose::Result::NO_VALID_PATH;
-        action_to_pose_server_->terminateCurrent();
+        action_to_pose_server_->terminateCurrent(result);
         return;
     }
 
@@ -183,7 +187,7 @@ void GlobalPlannerNode::handleComputePathThroughPoses()
     if (goal->goals.empty()) {
         G_PLANNER_ERROR("No poses provided in goal.");
         result->error_code = ActionThroughPoses::Result::NO_VIAPOINTS_GIVEN;
-        action_through_poses_server_->terminateCurrent();
+        action_through_poses_server_->terminateCurrent(result);
         return;
     }
 
@@ -195,7 +199,7 @@ void GlobalPlannerNode::handleComputePathThroughPoses()
         if (!rf_util::getCurrentPose(start_pose, *tf_buffer_)) {
             G_PLANNER_ERROR("Failed to get current pose.");
             result->error_code = ActionToPose::Result::TF_ERROR;
-            action_through_poses_server_->terminateCurrent();
+            action_through_poses_server_->terminateCurrent(result);
             return;
         }
     }
@@ -204,7 +208,7 @@ void GlobalPlannerNode::handleComputePathThroughPoses()
     if (planners_.find(planner_id) == planners_.end()) {
         G_PLANNER_ERROR("Planner '{}' not found.", planner_id);
         result->error_code = ActionToPose::Result::INVALID_PLANNER;
-        action_through_poses_server_->terminateCurrent();
+        action_through_poses_server_->terminateCurrent(result);
         return;
     }
 
@@ -221,36 +225,36 @@ void GlobalPlannerNode::handleComputePathThroughPoses()
         if (!transformPoseToGlobalFrame(cur_start) || !transformPoseToGlobalFrame(cur_goal)) {
             G_PLANNER_ERROR("Failed to transform poses to global frame.");
             result->error_code = ActionThroughPoses::Result::TF_ERROR;
-            action_through_poses_server_->terminateCurrent();
+            action_through_poses_server_->terminateCurrent(result);
             return;
         }
 
-        auto [err_code,cur_path] = getPlan(cur_start, cur_goal, planner_id);
+        auto [err_code, cur_path] = getPlan(cur_start, cur_goal, planner_id);
 
         if (err_code  == PlanErrorCode::PLANNER_NOT_FOUND) {
             G_PLANNER_ERROR("Planner '{}' not found.", planner_id);
             result->error_code = ActionThroughPoses::Result::INVALID_PLANNER;
-            action_through_poses_server_->terminateCurrent();
+            action_through_poses_server_->terminateCurrent(result);
             return;
         } else if (err_code == PlanErrorCode::GOAL_OUTSIDE_BOUNDS) {
             G_PLANNER_ERROR("Goal outside map.");
             result->error_code = ActionThroughPoses::Result::GOAL_OUTSIDE_MAP;
-            action_through_poses_server_->terminateCurrent();
+            action_through_poses_server_->terminateCurrent(result);
             return;
         } else if (err_code == PlanErrorCode::START_OUTSIDE_BOUNDS) {
             G_PLANNER_ERROR("Start outside map.");
             result->error_code = ActionThroughPoses::Result::START_OUTSIDE_MAP;
-            action_through_poses_server_->terminateCurrent();
+            action_through_poses_server_->terminateCurrent(result);
             return;
         } else if (err_code == PlanErrorCode::GOAL_OCCUPIED) {
             G_PLANNER_ERROR("goal occupied.");
             result->error_code = ActionThroughPoses::Result::GOAL_OCCUPIED;
-            action_through_poses_server_->terminateCurrent();
+            action_through_poses_server_->terminateCurrent(result);
             return;
         } else if (err_code != PlanErrorCode::OK) {
             G_PLANNER_ERROR("goal occupied.");
             result->error_code = ActionThroughPoses::Result::UNKNOWN;
-            action_through_poses_server_->terminateCurrent();
+            action_through_poses_server_->terminateCurrent(result);
             return;
         }
 
@@ -260,7 +264,7 @@ void GlobalPlannerNode::handleComputePathThroughPoses()
                 cur_goal.pose.position.x, cur_goal.pose.position.y,
                 planner_id);
             result->error_code = ActionThroughPoses::Result::NO_VALID_PATH;
-            action_through_poses_server_->terminateCurrent();
+            action_through_poses_server_->terminateCurrent(result);
             return;
         }
 

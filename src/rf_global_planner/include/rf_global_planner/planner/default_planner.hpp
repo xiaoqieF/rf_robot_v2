@@ -72,7 +72,7 @@ private:
     void preprocessCostmap();
 
 private:
-    static constexpr bool use_astar{false};
+    static constexpr bool use_astar{true};
     static constexpr double tolerance{0.0};
 
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;

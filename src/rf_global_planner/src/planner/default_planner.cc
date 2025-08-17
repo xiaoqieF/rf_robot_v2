@@ -172,12 +172,14 @@ nav_msgs::msg::Path DefaultPlanner::backtracePath(
     }
 
     nav_msgs::msg::Path path;
+    path.header.frame_id = "map";
     int cx = mx_goal;
     int cy = my_goal;
 
     while (mx_start != cx || my_start != cy) {
         geometry_msgs::msg::PoseStamped pose;
         mapToWorld(cx,cy, pose.pose.position.x, pose.pose.position.y);
+        pose.header.frame_id = "map";
         pose.pose.position.z = 0.0;
         pose.pose.orientation.x = 0.0;
         pose.pose.orientation.y = 0.0;
@@ -185,8 +187,9 @@ nav_msgs::msg::Path DefaultPlanner::backtracePath(
         pose.pose.orientation.w = 1.0;
 
         path.poses.push_back(pose);
-        int px = parents_x_[getIndex(mx_goal, my_goal)];
-        int py = parents_y_[getIndex(mx_goal, my_goal)];
+        int p_idx = getIndex(cx, cy);
+        int px = parents_x_[p_idx];
+        int py = parents_y_[p_idx];
 
         if (px == -1 || py == -1) {
             break;
@@ -197,6 +200,7 @@ nav_msgs::msg::Path DefaultPlanner::backtracePath(
 
     geometry_msgs::msg::PoseStamped start_pose;
     mapToWorld(mx_start, my_start, start_pose.pose.position.x, start_pose.pose.position.y);
+    start_pose.header.frame_id = "map";
     start_pose.pose.position.z = 0.0;
     start_pose.pose.orientation.x = 0.0;
     start_pose.pose.orientation.y = 0.0;
@@ -204,6 +208,7 @@ nav_msgs::msg::Path DefaultPlanner::backtracePath(
     start_pose.pose.orientation.w = 1.0;
 
     path.poses.push_back(start_pose);
+    G_PLANNER_INFO("Backtrace Path success, length: {}", path.poses.size());
 
     std::reverse(path.poses.begin(), path.poses.end());
     return path;

@@ -9,6 +9,7 @@
 #include "tf2/utils.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include <chrono>
 #include <pthread.h>
 #include <tf2_ros/create_timer_ros.h>
 
@@ -62,7 +63,7 @@ void CostmapInterface::init()
 
 void CostmapInterface::stop()
 {
-    COSTMAP_INFO("Stopping Costmap Interface map_name: {}", config_.map_name);
+    COSTMAP_INFO("Stopping Costmap Interface map_name: {} update.", config_.map_name);
     running_ = false;
     if (map_update_thread_.joinable()) {
         map_update_thread_.join();
@@ -71,7 +72,7 @@ void CostmapInterface::stop()
 
 void CostmapInterface::start()
 {
-    COSTMAP_INFO("Starting Costmap Interface map_name: {}", config_.map_name);
+    COSTMAP_INFO("Starting Costmap Interface map_name: {} update.", config_.map_name);
     map_update_thread_ = std::thread(&CostmapInterface::mapUpdateLoop, this);
     pthread_setname_np(map_update_thread_.native_handle(),
         (config_.map_name + "_update_thread").c_str());
@@ -91,15 +92,18 @@ void CostmapInterface::mapUpdateLoop()
         timer.tick();
         updateMap();
         timer.toc();
-        COSTMAP_INFO("Costmap update took {} ms",
-            std::chrono::duration_cast<std::chrono::milliseconds>(timer.elapsed()).count());
+
+        auto elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(timer.elapsed());
+        if (elapsed > rate.period()) {
+            COSTMAP_WARN("Costmap update took {} s", elapsed.count());
+        }
 
         // Pub costmap
         auto now = std::chrono::steady_clock::now();
         if (tick % pub_duration_ticks == 0) {
             costmap_publisher_->publishCostmap();
             last_publish_time_ = now;
-            COSTMAP_INFO("Costmap published at {}", rclcpp::Clock().now().seconds());
+            // COSTMAP_INFO("Costmap published at {}", rclcpp::Clock().now().seconds());
         }
 
         rate.sleep();

@@ -1,6 +1,8 @@
 #include "rf_scheduler_node/scheduler_node.hpp"
 #include "rclcpp/rate.hpp"
 #include "elog/elog.h"
+#include <rclcpp_action/client_goal_handle.hpp>
+#include <rclcpp_action/create_client.hpp>
 
 namespace rf_scheduler
 {
@@ -30,6 +32,12 @@ void SchedulerNode::init()
             goal_pose_msg_ = msg;
         });
 
+    action_to_pose_client_ = rclcpp_action::create_client<ActionToPose>(
+        this, "/compute_path_to_pose");
+
+    action_through_poses_client_ = rclcpp_action::create_client<ActionThroughPoses>(
+        this, "/compute_path_through_poses");
+
     loop_thread_ = std::make_unique<std::thread>(&SchedulerNode::loop, this);
     loop_thread_->detach();
 }
@@ -47,6 +55,7 @@ void SchedulerNode::loop()
 
 void SchedulerNode::handleGoalPoseMsg()
 {
+    using namespace std::chrono_literals;
     PoseStampedT::SharedPtr msg;
     {
         std::lock_guard<std::mutex> lock(goal_pose_mutex_);
@@ -58,6 +67,46 @@ void SchedulerNode::handleGoalPoseMsg()
 
     SCHED_INFO("Received goal pose: {}, {}", msg->pose.position.x, msg->pose.position.y);
 
+    if (!action_to_pose_client_->wait_for_action_server(10ms)) {
+        SCHED_WARN("Action server not available");
+        return;
+    }
+
+    ActionToPose::Goal goal;
+    goal.goal.pose = msg->pose;
+    goal.goal.header = msg->header;
+
+    auto future_goal_handle = action_to_pose_client_->async_send_goal(goal);
+    auto result = future_goal_handle.wait_for(100ms);
+
+    if (result != std::future_status::ready) {
+        SCHED_WARN("Goal accepted timeout");
+        return;
+    }
+
+    auto future_result = action_to_pose_client_->async_get_result(future_goal_handle.get());
+    result = future_result.wait_for(1s);
+
+    if (result != std::future_status::ready) {
+        SCHED_WARN("Goal result timeout");
+        return;
+    }
+
+    auto result_msg = future_result.get();
+
+    switch (result_msg.code) {
+        case rclcpp_action::ResultCode::SUCCEEDED:
+            SCHED_INFO("Goal succeeded");
+            break;
+        case rclcpp_action::ResultCode::CANCELED:
+            SCHED_INFO("Goal canceled");
+            break;
+        case rclcpp_action::ResultCode::ABORTED:
+            SCHED_WARN("Goal aborted, error code: {}", result_msg.result->error_code);
+            break;
+        default:
+            break;
+    }
 }
 
 } // namespace rf_scheduler
