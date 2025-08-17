@@ -73,7 +73,7 @@ private:
 
 private:
     static constexpr bool use_astar{true};
-    static constexpr double tolerance{0.0};
+    static constexpr double tolerance{0.1};
 
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     rf_robot_msgs::msg::Costmap::SharedPtr costmap_;

@@ -42,7 +42,7 @@ std::pair<PlanErrorCode, nav_msgs::msg::Path> DefaultPlanner::getPlan(
         return std::make_pair(PlanErrorCode::GOAL_OUTSIDE_BOUNDS, nav_msgs::msg::Path());
     }
 
-    if (tolerance == 0 && costmap_->data[getIndex(mx_goal, my_goal)] == 100) {
+    if (tolerance == 0 && costmap_->data[getIndex(mx_goal, my_goal)] == LETHAL_OBSTACLE) {
         return std::make_pair(PlanErrorCode::GOAL_OCCUPIED, nav_msgs::msg::Path());
     }
 
@@ -167,10 +167,6 @@ void DefaultPlanner::searchPlan(
 nav_msgs::msg::Path DefaultPlanner::backtracePath(
     int mx_start, int my_start, int mx_goal, int my_goal)
 {
-    if (!found_) {
-        return nav_msgs::msg::Path();
-    }
-
     nav_msgs::msg::Path path;
     path.header.frame_id = "map";
     int cx = mx_goal;
