@@ -71,6 +71,7 @@ ament_export_dependencies(
   nav_msgs
   rclcpp
   OpenCV
+  yaml-cpp
 )
 
 add_subdirectory(test)
