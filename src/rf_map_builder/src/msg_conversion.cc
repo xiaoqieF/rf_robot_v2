@@ -82,7 +82,7 @@ Eigen::Quaterniond toEigen(const geometry_msgs::msg::Quaternion& quaternion) {
                               quaternion.z);
 }
 
-LandmarkData ToLandmarkData(const rf_robot_msgs::msg::LandmarkList& landmark_list)
+LandmarkData toLandmarkData(const rf_robot_msgs::msg::LandmarkList& landmark_list)
 {
     LandmarkData landmark_data;
     landmark_data.time = fromRos(landmark_list.header.stamp);

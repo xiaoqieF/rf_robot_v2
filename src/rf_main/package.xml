@@ -16,6 +16,7 @@
   <depend>rf_global_planner</depend>
   <depend>rf_map_manager</depend>
   <depend>rf_scheduler_node</depend>
+  <depend>rf_map_builder</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

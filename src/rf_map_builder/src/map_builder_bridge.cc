@@ -95,9 +95,6 @@ std::unordered_map<int, MapBuilderBridge::LocalTrajectoryData> MapBuilderBridge:
         local_trajectory_data[trajectory_id] = {
             local_slam_data,
             map_builder_->pose_graph()->GetLocalToGlobalTransform(trajectory_id),
-            sensor_bridge->tfBridge().lookupToTracking(
-                local_slam_data->time, trajectory_options_[trajectory_id].published_frame
-            ),
             trajectory_options_[trajectory_id]
         };
     }

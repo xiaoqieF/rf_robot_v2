@@ -28,10 +28,12 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-add_library(${PROJECT_NAME} SHARED
+add_library(${PROJECT_NAME} STATIC
   src/map_builder_bridge.cc
   src/msg_conversion.cc
   src/sensor_bridge.cc
+  src/map_builder_node.cc
+  src/config_options.cc
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC

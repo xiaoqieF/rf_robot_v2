@@ -8,6 +8,8 @@
 #include "cartographer/transform/rigid_transform.h"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
+#include <cartographer/sensor/odometry_data.h>
+#include <memory>
 
 namespace rf_map_builder
 {
@@ -24,6 +26,11 @@ public:
 
     SensorBridge(const SensorBridge&) = delete;
     SensorBridge& operator=(const SensorBridge&) = delete;
+
+    std::unique_ptr<cartographer::sensor::OdometryData> toOdometryData(
+        const nav_msgs::msg::Odometry::ConstSharedPtr& msg);
+    std::unique_ptr<cartographer::sensor::ImuData> toImuData(
+        const sensor_msgs::msg::Imu::ConstSharedPtr& msg);
 
     void handleOdometryMessage(const std::string& sensor_id,
         const nav_msgs::msg::Odometry::ConstSharedPtr& msg);

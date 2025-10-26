@@ -23,7 +23,6 @@ struct TrajectoryOptions
 {
     cartographer::mapping::proto::TrajectoryBuilderOptions trajectory_builder_options;
     std::string tracking_frame;
-    std::string published_frame;
     std::string odom_frame;
     bool use_odometry;
     bool use_nav_sat;
@@ -52,5 +51,29 @@ struct TrajectoryOptions
     do { \
         elog::error("[rf_map_builder] " fmt_str, ##__VA_ARGS__); \
     } while(0)
+
+inline constexpr char kLaserScanTopic[] = "scan";
+inline constexpr char kMultiEchoLaserScanTopic[] = "echoes";
+inline constexpr char kPointCloud2Topic[] = "points2";
+inline constexpr char kImuTopic[] = "imu";
+inline constexpr char kOdometryTopic[] = "odom";
+inline constexpr char kNavSatFixTopic[] = "fix";
+inline constexpr char kLandmarkTopic[] = "landmark";
+inline constexpr char kFinishTrajectoryServiceName[] = "finish_trajectory";
+inline constexpr char kOccupancyGridTopic[] = "map";
+inline constexpr char kScanMatchedPointCloudTopic[] = "scan_matched_points2";
+inline constexpr char kSubmapListTopic[] = "submap_list";
+inline constexpr char kTrackedPoseTopic[] = "tracked_pose";
+inline constexpr char kStartTrajectoryServiceName[] = "start_trajectory";
+inline constexpr double kExtrapolationEstimationTimeSec = 0.001;
+inline constexpr double kGravityTimeConstant = 10.0;
+
+std::vector<std::string> computeRepeatedTopicNames(
+    const std::string& base_topic, const int count);
+
+std::tuple<NodeOptions, TrajectoryOptions> loadOptions(
+    const std::string& config_file_directory, const std::string& config_file_name);
+NodeOptions createNodeOptions(cartographer::common::LuaParameterDictionary* lua_parameter_dictionary);
+TrajectoryOptions createTrajectoryBuilderOptions(cartographer::common::LuaParameterDictionary* lua_parameter_dictionary);
 
 } // namespace rf_map_builder

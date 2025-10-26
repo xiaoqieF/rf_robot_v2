@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include <tf2_ros/buffer.h>
+#include "rf_map_builder/sensor_bridge.hpp"
 #include "rf_robot_msgs/msg/submap_list.hpp"
 #include "cartographer/mapping/map_builder_interface.h"
 #include <cartographer/transform/rigid_transform.h>
@@ -32,7 +33,6 @@ public:
 
         std::shared_ptr<const LocalSlamData> local_slam_data;
         cartographer::transform::Rigid3d local_to_map;
-        std::unique_ptr<cartographer::transform::Rigid3d> published_to_tracking;
         TrajectoryOptions trajectory_options;
     };
 

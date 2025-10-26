@@ -55,8 +55,18 @@ def generate_launch_description():
         parameters=[{
             'config_file': os.path.join(pkg_share, 'config', 'ros_gz_bridge.yaml'),
             'qos_overrides./tf_static.publisher.durability': 'transient_local',
+            "use_sim_time": True
         }],
         output='screen'
+    )
+
+    rf_main_node = Node(
+        package='rf_main',
+        executable='rf_main',
+        name='rf_main',
+        parameters=[{
+            'use_sim_time': True,
+        }]
     )
 
     # Launch RViz
@@ -72,7 +82,7 @@ def generate_launch_description():
     ld.add_action(start_robot_state_publisher_cmd)
     ld.add_action(spawn_urdf_node)
     ld.add_action(gz_bridge_node)
+    ld.add_action(rf_main_node)
     ld.add_action(start_rviz_cmd)
-
 
     return ld

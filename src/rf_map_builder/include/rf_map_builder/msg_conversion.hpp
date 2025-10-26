@@ -18,7 +18,7 @@ cartographer::transform::Rigid3d toRigid3d(const geometry_msgs::msg::TransformSt
 cartographer::transform::Rigid3d toRigid3d(const geometry_msgs::msg::Pose& pose);
 Eigen::Vector3d toEigen(const geometry_msgs::msg::Vector3& vector3);
 Eigen::Quaterniond toEigen(const geometry_msgs::msg::Quaternion& quaternion);
-cartographer::sensor::LandmarkData ToLandmarkData(const rf_robot_msgs::msg::LandmarkList& landmark_list);
+cartographer::sensor::LandmarkData toLandmarkData(const rf_robot_msgs::msg::LandmarkList& landmark_list);
 
 sensor_msgs::msg::PointCloud2 toPointCloud2Message(
     int64_t timestamp, const std::string& frame_id,
