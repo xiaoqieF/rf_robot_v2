@@ -3,6 +3,7 @@
 #include "rf_map_builder/map_builder_bridge.hpp"
 #include "rf_map_builder/msg_conversion.hpp"
 #include "rf_map_builder/sensor_bridge.hpp"
+#include "cartographer/transform/transform.h"
 #include "rf_robot_msgs/msg/submap_entry.hpp"
 #include "rf_robot_msgs/msg/submap_list.hpp"
 #include <cartographer/transform/rigid_transform.h>
@@ -118,6 +119,47 @@ rf_robot_msgs::msg::SubmapList MapBuilderBridge::getSubmapList(rclcpp::Time node
     }
 
     return submap_list;
+}
+
+std::map<mapping::SubmapId, io::SubmapSlice> MapBuilderBridge::getSubmapSlices()
+{
+    std::map<mapping::SubmapId, io::SubmapSlice> submap_slices;
+    auto all_submap_poses = map_builder_->pose_graph()->GetAllSubmapPoses();
+    for (const auto& submap_id_pose : all_submap_poses) {
+        mapping::proto::SubmapQuery::Response response;
+        const auto error = map_builder_->SubmapToProto(submap_id_pose.id, &response);
+        if (!error.empty()) {
+            MAP_BUILDER_WARN("Failed to query submap {}:{}: {}",
+                submap_id_pose.id.trajectory_id,
+                submap_id_pose.id.submap_index,
+                error);
+            continue;
+        }
+        if (response.textures_size() == 0) {
+            continue;
+        }
+
+        auto& submap_slice = submap_slices[submap_id_pose.id];
+        const auto& texture = response.textures(0);
+        const auto pixels = io::UnpackTextureData(
+            texture.cells(), texture.width(), texture.height());
+
+        submap_slice.width = texture.width();
+        submap_slice.height = texture.height();
+        submap_slice.version = response.submap_version();
+        submap_slice.resolution = texture.resolution();
+        submap_slice.slice_pose = transform::ToRigid3(texture.slice_pose());
+        submap_slice.surface = io::DrawTexture(
+            pixels.intensity,
+            pixels.alpha,
+            texture.width(),
+            texture.height(),
+            &submap_slice.cairo_data);
+        submap_slice.pose = submap_id_pose.data.pose;
+        submap_slice.metadata_version = submap_id_pose.data.version;
+    }
+
+    return submap_slices;
 }
 
 SensorBridge* MapBuilderBridge::sensorBridge(int trajectory_id)

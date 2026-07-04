@@ -1,6 +1,7 @@
 #pragma once
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "nav_msgs/msg/occupancy_grid.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rf_map_builder/config_options.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
@@ -35,6 +36,7 @@ public:
 private:
     int addTrajectory(const TrajectoryOptions& trajectory_options);
     void publishSubmapList();
+    void publishOccupancyGrid();
     void publishLocalTrajectoryData();
     void handleLaserScanMessage(const std::string& sensor_id,
         const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg);
@@ -60,9 +62,11 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
     std::mutex mutex_;
+    rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr occupancy_grid_publisher_;
     rclcpp::Publisher<SubmapListMsgT>::SharedPtr submap_list_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr tracked_pose_publisher_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr scan_matched_points_publisher_;
+    rclcpp::TimerBase::SharedPtr occupancy_grid_timer_;
     rclcpp::TimerBase::SharedPtr submap_list_timer_;
     rclcpp::TimerBase::SharedPtr local_trajectory_data_timer_;
 

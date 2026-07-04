@@ -2,10 +2,13 @@
 
 #include "rf_map_builder/config_options.hpp"
 
+#include <map>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
 
+#include "cartographer/io/submap_painter.h"
+#include "cartographer/mapping/id.h"
 #include <tf2_ros/buffer.h>
 #include "rf_map_builder/sensor_bridge.hpp"
 #include "rf_robot_msgs/msg/submap_list.hpp"
@@ -52,6 +55,7 @@ public:
     std::map<int, cartographer::mapping::PoseGraphInterface::TrajectoryState> getTrajectoryStates();
     std::unordered_map<int, LocalTrajectoryData> getLocalTrajectoryData();
     rf_robot_msgs::msg::SubmapList getSubmapList(rclcpp::Time node_time);
+    std::map<cartographer::mapping::SubmapId, cartographer::io::SubmapSlice> getSubmapSlices();
 
     SensorBridge* sensorBridge(int trajectory_id);
 

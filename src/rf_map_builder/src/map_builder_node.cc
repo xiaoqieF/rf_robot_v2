@@ -1,13 +1,18 @@
 #include "rf_map_builder/map_builder_node.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "rf_map_builder/config_options.hpp"
+#include "cartographer/io/image.h"
+#include "cartographer/io/submap_painter.h"
 #include "cartographer/mapping/map_builder.h"
 #include "rf_map_builder/msg_conversion.hpp"
 #include "rf_map_builder/sensor_bridge.hpp"
 #include "ament_index_cpp/get_package_share_directory.hpp"
+#include <algorithm>
 #include <cartographer/sensor/point_cloud.h>
 #include <cartographer/sensor/rangefinder_point.h>
 #include <cartographer/transform/transform.h>
+#include <cmath>
+#include <limits>
 #include <rclcpp/subscription_base.hpp>
 #include <tf2/time.hpp>
 
@@ -15,6 +20,65 @@ namespace rf_map_builder
 {
 
 namespace {
+int8_t toOccupancyValue(const cartographer::io::Uint8Color& color)
+{
+    if (color[1] == 0) {
+        return -1;
+    }
+
+    const double occupancy_probability = 1.0 - static_cast<double>(color[0]) / 255.0;
+    const int occupancy = static_cast<int>(std::lround(occupancy_probability * 100.0));
+    return static_cast<int8_t>(std::max(0, std::min(100, occupancy)));
+}
+
+double computeOccupancyGridResolution(
+    const std::map<cartographer::mapping::SubmapId, cartographer::io::SubmapSlice>& submap_slices)
+{
+    double resolution = std::numeric_limits<double>::infinity();
+    for (const auto& [submap_id, submap_slice] : submap_slices) {
+        (void)submap_id;
+        if (submap_slice.surface == nullptr) {
+            continue;
+        }
+        resolution = std::min(resolution, submap_slice.resolution);
+    }
+
+    return std::isfinite(resolution) ? resolution : 0.0;
+}
+
+nav_msgs::msg::OccupancyGrid createOccupancyGridMsg(
+    cartographer::io::PaintSubmapSlicesResult painted_submaps,
+    const double resolution,
+    const rclcpp::Time& stamp,
+    const std::string& frame_id)
+{
+    cartographer::io::Image image(std::move(painted_submaps.surface));
+
+    nav_msgs::msg::OccupancyGrid occupancy_grid;
+    occupancy_grid.header.stamp = stamp;
+    occupancy_grid.header.frame_id = frame_id;
+    occupancy_grid.info.map_load_time = stamp;
+    occupancy_grid.info.resolution = resolution;
+    occupancy_grid.info.width = image.width();
+    occupancy_grid.info.height = image.height();
+    occupancy_grid.info.origin.position.x = -painted_submaps.origin.x() * resolution;
+    occupancy_grid.info.origin.position.y =
+        (painted_submaps.origin.y() - static_cast<float>(image.height())) * resolution;
+    occupancy_grid.info.origin.position.z = 0.0;
+    occupancy_grid.info.origin.orientation.w = 1.0;
+
+    occupancy_grid.data.resize(static_cast<size_t>(image.width()) * image.height());
+    for (int y = 0; y < image.height(); ++y) {
+        const int source_y = image.height() - 1 - y;
+        for (int x = 0; x < image.width(); ++x) {
+            occupancy_grid.data[static_cast<size_t>(y) * image.width() + x] =
+                toOccupancyValue(image.GetPixel(x, source_y));
+        }
+    }
+
+    return occupancy_grid;
+}
+
 template <typename MsgT>
 rclcpp::SubscriptionBase::SharedPtr createSubscription(
     rclcpp::Node* node, const std::string& topic,
@@ -66,9 +130,19 @@ MapBuilderNode::MapBuilderNode()
     );
 
     // Publishers
+    rclcpp::QoS map_qos(1);
+    map_qos.transient_local();
+    occupancy_grid_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
+        kOccupancyGridTopic, map_qos);
     submap_list_publisher_ = this->create_publisher<SubmapListMsgT>(kSubmapListTopic, 10);
     tracked_pose_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(kTrackedPoseTopic, 10);
     scan_matched_points_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(kScanMatchedPointCloudTopic, 10);
+
+    occupancy_grid_timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(static_cast<int>(node_options_.submap_publish_period_sec * 1000)),
+        [this]() {
+            publishOccupancyGrid();
+        });
 
     submap_list_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(static_cast<int>(node_options_.submap_publish_period_sec * 1000)),
@@ -255,6 +329,31 @@ void MapBuilderNode::handleLandmarkMessage(const std::string& sensor_id,
         return;
     }
     map_builder_bridge_->sensorBridge(current_trajectory_id_)->handleLandmarkMessage(sensor_id, msg);
+}
+
+void MapBuilderNode::publishOccupancyGrid()
+{
+    if (current_trajectory_id_ == -1) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto submap_slices = map_builder_bridge_->getSubmapSlices();
+    if (submap_slices.empty()) {
+        return;
+    }
+
+    const double resolution = computeOccupancyGridResolution(submap_slices);
+    if (resolution <= 0.0) {
+        MAP_BUILDER_WARN("Cannot publish occupancy grid because no valid submap resolution is available.");
+        return;
+    }
+
+    occupancy_grid_publisher_->publish(createOccupancyGridMsg(
+        cartographer::io::PaintSubmapSlices(submap_slices, resolution),
+        resolution,
+        this->now(),
+        node_options_.map_frame));
 }
 
 void MapBuilderNode::publishSubmapList()

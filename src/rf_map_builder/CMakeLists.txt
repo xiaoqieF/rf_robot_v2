@@ -14,6 +14,7 @@ find_package(ament_index_cpp REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(rf_robot_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(elog REQUIRED)
 find_package(rf_util REQUIRED)
@@ -51,6 +52,7 @@ ament_target_dependencies(${PROJECT_NAME} PUBLIC
   elog
   rf_util
   geometry_msgs
+  nav_msgs
   sensor_msgs
   pcl_conversions
 )
@@ -78,6 +80,7 @@ ament_export_dependencies(
   elog
   rf_util
   geometry_msgs
+  nav_msgs
   sensor_msgs
   pcl_conversions
   cartographer
