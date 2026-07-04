@@ -1,7 +1,5 @@
 #include "rf_map_builder/msg_conversion.hpp"
-#include "sensor_msgs/msg/laser_scan.hpp"
-#include "sensor_msgs/msg/point_cloud2.hpp"
-#include <Eigen/src/Geometry/AngleAxis.h>
+#include <Eigen/Geometry>
 #include <cartographer/sensor/landmark_data.h>
 #include <cartographer/sensor/point_cloud.h>
 #include <cartographer/sensor/rangefinder_point.h>
@@ -9,6 +7,8 @@
 #include "pcl/point_cloud.h"
 #include "pcl/point_types.h"
 #include "pcl_conversions/pcl_conversions.h"
+#include "sensor_msgs/msg/laser_scan.hpp"
+#include "sensor_msgs/msg/point_cloud2.hpp"
 #include <tuple>
 
 namespace {

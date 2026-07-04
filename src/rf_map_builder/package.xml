@@ -8,9 +8,11 @@
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>eigen3_cmake_module</buildtool_depend>
 
   <depend>rf_robot_msgs</depend>
   <depend>ament_index_cpp</depend>
+  <depend>eigen</depend>
   <depend>elog</depend>
   <depend>rf_util</depend>
   <depend>geometry_msgs</depend>

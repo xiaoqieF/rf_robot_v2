@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Eigen/Core"
 #include "Eigen/Geometry"
 #include "cartographer/common/time.h"
 #include "cartographer/sensor/landmark_data.h"
 #include "cartographer/sensor/point_cloud.h"
 #include "cartographer/transform/rigid_transform.h"
+#include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/transform.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
