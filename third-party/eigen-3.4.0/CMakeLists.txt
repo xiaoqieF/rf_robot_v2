@@ -482,6 +482,12 @@ if(EIGEN_BUILD_DOC)
 endif()
 
 
+if(BUILD_TESTING)
+  # This workspace vendors Eigen as a pure dependency, so we don't need Eigen's
+  # internal test suite during a colcon build. Keeping it on would require
+  # additional upstream test-only files that are not present here.
+  set(BUILD_TESTING OFF CACHE BOOL "Enable creation of Eigen tests." FORCE)
+endif()
 option(BUILD_TESTING "Enable creation of Eigen tests." ON)
 if(BUILD_TESTING)
   include(EigenConfigureTesting)

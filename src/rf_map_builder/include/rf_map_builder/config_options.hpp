@@ -6,6 +6,8 @@
 #include "cartographer/mapping/proto/map_builder_options.pb.h"
 #include <cartographer/mapping/proto/trajectory_builder_options.pb.h>
 
+#include <vector>
+
 namespace rf_map_builder
 {
 
@@ -72,7 +74,8 @@ std::vector<std::string> computeRepeatedTopicNames(
     const std::string& base_topic, const int count);
 
 std::tuple<NodeOptions, TrajectoryOptions> loadOptions(
-    const std::string& config_file_directory, const std::string& config_file_name);
+    const std::vector<std::string>& config_file_directories,
+    const std::string& config_file_name);
 NodeOptions createNodeOptions(cartographer::common::LuaParameterDictionary* lua_parameter_dictionary);
 TrajectoryOptions createTrajectoryBuilderOptions(cartographer::common::LuaParameterDictionary* lua_parameter_dictionary);
 

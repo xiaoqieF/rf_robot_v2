@@ -21,10 +21,11 @@ std::vector<std::string> computeRepeatedTopicNames(
 }
 
 std::tuple<NodeOptions, TrajectoryOptions> loadOptions(
-    const std::string& config_file_directory, const std::string& config_file_name)
+    const std::vector<std::string>& config_file_directories,
+    const std::string& config_file_name)
 {
     auto file_resolver = std::make_unique<cartographer::common::ConfigurationFileResolver>(
-        std::vector<std::string>{config_file_directory});
+        config_file_directories);
     const std::string code = file_resolver->GetFileContentOrDie(config_file_name);
     cartographer::common::LuaParameterDictionary lua_parameter_dictionary(code, std::move(file_resolver));
 

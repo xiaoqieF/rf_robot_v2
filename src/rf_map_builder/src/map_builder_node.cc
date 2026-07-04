@@ -4,6 +4,7 @@
 #include "cartographer/mapping/map_builder.h"
 #include "rf_map_builder/msg_conversion.hpp"
 #include "rf_map_builder/sensor_bridge.hpp"
+#include "ament_index_cpp/get_package_share_directory.hpp"
 #include <cartographer/sensor/point_cloud.h>
 #include <cartographer/sensor/rangefinder_point.h>
 #include <cartographer/transform/transform.h>
@@ -32,9 +33,16 @@ MapBuilderNode::MapBuilderNode()
 {
     MAP_BUILDER_INFO("Initializing MapBuilderNode...");
 
-    std::string cfg_base_dir = std::string(std::getenv("HOME")) + "/.rf_robot/config";
     std::string cfg_file = "default_map_builder_cfg.lua";
-    std::tie(node_options_, trajectory_options_) = loadOptions(cfg_base_dir, cfg_file);
+    std::vector<std::string> cfg_search_paths;
+    cfg_search_paths.emplace_back(
+        ament_index_cpp::get_package_share_directory("rf_map_builder") + "/config");
+
+    if (const char* home = std::getenv("HOME"); home != nullptr) {
+        cfg_search_paths.emplace_back(std::string(home) + "/.rf_robot/config");
+    }
+
+    std::tie(node_options_, trajectory_options_) = loadOptions(cfg_search_paths, cfg_file);
 
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock(), tf2::durationFromSec(10), this);
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
