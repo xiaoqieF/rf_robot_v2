@@ -8,7 +8,7 @@
 
 - `rf_main`
   统一启动并托管以下节点：
-  `rf_global_map`、`rf_local_map`、`rf_map_manager`、`rf_global_planner`、`rf_scheduler_node`、`rf_map_builder`。
+  `rf_global_map`、`rf_local_map`、`rf_localization`、`rf_map_manager`、`rf_global_planner`、`rf_scheduler_node`、`rf_map_builder`。
 
 - `rf_costmap`
   提供代价地图基础库，已经实现：
@@ -52,6 +52,14 @@
   发布 `map -> odom` TF；
   支持激光、点云、里程计、IMU、地标数据桥接到 Cartographer。
 
+- `rf_localization`
+  提供纯定位节点，当前已经实现：
+  定位方法可选框架；
+  基于静态 `/map` + `scan` + `odom` 的 2D ICP 定位；
+  发布定位位姿；
+  发布 `map -> odom` TF；
+  通过 `/localization_control` 服务启停定位。
+
 - `robot_model`
   提供 Gazebo 仿真资源，包含：
   `fishbot_gazebo.urdf`；
@@ -78,6 +86,9 @@
 
 - `src/rf_local_map`
   局部代价地图节点。
+
+- `src/rf_localization`
+  纯定位节点与定位方法实现，当前内置 ICP。
 
 - `src/rf_map_manager`
   静态地图读写与发布。
@@ -112,7 +123,8 @@
 3. `rf_local_map` 基于 `/scan` 和 TF 生成 `/local_costmap` 与 `/local_costmap_raw`。
 4. `rf_global_planner` 订阅 `/global_costmap_raw`，对外提供路径规划 action。
 5. `rf_scheduler_node` 监听 `/goal_pose`，调用规划 action。
-6. `rf_map_builder` 独立接入传感器与 TF，维护 Cartographer trajectory，发布位姿、子图和点云结果。
+6. `rf_localization` 订阅静态地图、激光和里程计，执行纯定位并维护 `map -> odom` TF。
+7. `rf_map_builder` 独立接入传感器与 TF，维护 Cartographer trajectory，发布位姿、子图和点云结果。
 
 ## 关键接口
 
@@ -133,6 +145,7 @@
   `/local_costmap`
   `/local_costmap_raw`
   `/global_path`
+  `localization_pose`
   `submap_list`
   `tracked_pose`
   `scan_matched_points2`
@@ -156,6 +169,9 @@
 
 - `/build_map`
   启动 Cartographer trajectory。
+
+- `/localization_control`
+  启停纯定位节点。
 
 ### Actions
 
