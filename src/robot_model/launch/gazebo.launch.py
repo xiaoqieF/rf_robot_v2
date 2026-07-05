@@ -64,6 +64,8 @@ def generate_launch_description():
         package='rf_main',
         executable='rf_main',
         name='rf_main',
+        output='screen',
+        emulate_tty=True,
         parameters=[{
             'use_sim_time': True,
         }]

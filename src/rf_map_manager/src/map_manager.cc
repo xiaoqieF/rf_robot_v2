@@ -7,8 +7,11 @@
 #include "opencv2/opencv.hpp"
 #include "yaml-cpp/yaml.h"
 
+#include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <opencv2/imgcodecs.hpp>
 #include <string>
@@ -18,25 +21,82 @@
 namespace rf_map_manager
 {
 
-const std::string occ_file_name = "occ_map";
+namespace
+{
+
+constexpr char kOccFileName[] = "occ_map";
+
+} // namespace
 
 MapManager::MapManager(rclcpp::Node::SharedPtr node,
     const std::string& map_dir)
     : node_(node),
       map_dir_(map_dir)
 {
-    map_publisher_ = node_->create_publisher<OccupancyGridMsgT>("map", rclcpp::QoS(1));
+    auto map_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
+    map_publisher_ = node_->create_publisher<OccupancyGridMsgT>("/map", map_qos);
+    map_subscription_ = node_->create_subscription<OccupancyGridMsgT>(
+        "/slam_map", map_qos,
+        std::bind(&MapManager::handleMapUpdate, this, std::placeholders::_1));
     get_map_service_ = node_->create_service<GetMapSrvT>(
-        "get_map", std::bind(&MapManager::handleGetMapService, this, std::placeholders::_1, std::placeholders::_2));
+        "/get_map", std::bind(&MapManager::handleGetMapService, this, std::placeholders::_1, std::placeholders::_2));
     dump_map_service_ = node_->create_service<DumpMapSrvT>(
-        "dump_map", std::bind(&MapManager::handleDumpMapService, this, std::placeholders::_1, std::placeholders::_2));
+        "/dump_map", std::bind(&MapManager::handleDumpMapService, this, std::placeholders::_1, std::placeholders::_2));
+    MAP_MANAGER_INFO("MapManager subscribed to \"/slam_map\" for map cache update.");
+}
+
+bool MapManager::ensureMapDir() const
+{
+    std::error_code ec;
+    if (std::filesystem::exists(map_dir_, ec)) {
+        return true;
+    }
+    if (std::filesystem::create_directories(map_dir_, ec)) {
+        return true;
+    }
+    MAP_MANAGER_WARN("Failed to create map directory {}: {}", map_dir_, ec.message());
+    return false;
+}
+
+void MapManager::handleMapUpdate(const OccupancyGridMsgT::SharedPtr msg)
+{
+    if (!msg) {
+        return;
+    }
+    if (msg->info.width == 0 || msg->info.height == 0 || msg->data.empty()) {
+        MAP_MANAGER_WARN("Ignore empty map from \"/slam_map\".");
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(map_mutex_);
+    cached_map_ = std::make_shared<OccupancyGridMsgT>(*msg);
+}
+
+bool MapManager::saveCachedMap(std::string* reason)
+{
+    OccupancyGridMsgT::SharedPtr cached_map;
+    {
+        std::lock_guard<std::mutex> lock(map_mutex_);
+        cached_map = cached_map_;
+    }
+
+    if (!cached_map) {
+        if (reason) {
+            *reason = "No cached /slam_map received yet.";
+        }
+        return false;
+    }
+
+    const bool success = dumpMap(*cached_map);
+    if (!success && reason) {
+        *reason = "Failed to dump cached map to disk.";
+    }
+    return success;
 }
 
 void MapManager::reloadMap()
 {
-    std::string meta_data_file = map_dir_ + "/" + occ_file_name + ".yaml";
-    YAML::Node doc = YAML::LoadFile(meta_data_file);
-
+    std::string meta_data_file = map_dir_ + "/" + kOccFileName + ".yaml";
     double resolution = 0.0;
     std::string image_file_name;
     std::vector<double> origin;
@@ -46,6 +106,7 @@ void MapManager::reloadMap()
     int negate = 0;
 
     try {
+        YAML::Node doc = YAML::LoadFile(meta_data_file);
         image_file_name = doc["image"].as<std::string>();
         image_file_name = map_dir_ + "/" + image_file_name;
         resolution = doc["resolution"].as<double>();
@@ -81,7 +142,12 @@ void MapManager::reloadMap()
     grid.info.origin.position.x = origin[0];
     grid.info.origin.position.y = origin[1];
     grid.info.origin.position.z = 0;
-    grid.info.origin.orientation.w = 1.0;
+    tf2::Quaternion orientation;
+    orientation.setRPY(0.0, 0.0, origin[2]);
+    grid.info.origin.orientation.x = orientation.x();
+    grid.info.origin.orientation.y = orientation.y();
+    grid.info.origin.orientation.z = orientation.z();
+    grid.info.origin.orientation.w = orientation.w();
 
     grid.data.resize(grid.info.width * grid.info.height);
     for (int y = 0; y < img.rows; ++y) {
@@ -102,26 +168,40 @@ void MapManager::reloadMap()
     grid.header.frame_id = "map";
     grid.header.stamp = node_->now();
 
-  cached_map_ = std::make_shared<OccupancyGridMsgT>(grid);
+    std::lock_guard<std::mutex> lock(map_mutex_);
+    cached_map_ = std::make_shared<OccupancyGridMsgT>(grid);
 }
 
 bool MapManager::dumpMap(const OccupancyGridMsgT& map)
 {
+    if (!ensureMapDir()) {
+        return false;
+    }
+    if (map.info.width == 0 || map.info.height == 0) {
+        MAP_MANAGER_WARN("Refuse to dump empty map.");
+        return false;
+    }
+    if (map.data.size() != map.info.width * map.info.height) {
+        MAP_MANAGER_WARN("Map data size mismatch, expect {}, actual {}.",
+            map.info.width * map.info.height, map.data.size());
+        return false;
+    }
+
     // Dump map as trinary mode
     static constexpr double occupied_thresh = 0.65;
     static constexpr double free_thresh = 0.196;
 
     // To dump map file
-    std::string map_data_file = map_dir_ + "/" + occ_file_name + ".pgm";
+    std::string map_data_file = map_dir_ + "/" + kOccFileName + ".pgm";
     int free_thresh_int = std::rint(free_thresh * 100.0);
     int occupied_thresh_int = std::rint(occupied_thresh * 100.0);
 
     cv::Mat image(map.info.height, map.info.width, CV_8UC1);
     for (unsigned int y = 0; y < map.info.height; ++ y) {
         for (unsigned int x = 0; x < map.info.width; ++ x) {
-            uint8_t cell = map.data[map.info.width * (map.info.height - y - 1) + x];
+            int8_t cell = map.data[map.info.width * (map.info.height - y - 1) + x];
             uchar color = 0;
-            if (cell == 0 || cell > 100) {
+            if (cell < 0) {
                 color = 205;  // grey
             } else if (cell >= occupied_thresh_int) {
                 color = 0;    // black
@@ -134,11 +214,14 @@ bool MapManager::dumpMap(const OccupancyGridMsgT& map)
         }
     }
 
-    cv::imwrite(map_data_file, image);
+    if (!cv::imwrite(map_data_file, image)) {
+        MAP_MANAGER_WARN("Failed to write map image into {}", map_data_file);
+        return false;
+    }
     MAP_MANAGER_INFO("Write map_data into {}", map_data_file);
 
     // To dump param yaml
-    std::string meta_data_file = map_dir_ + "/" + occ_file_name + ".yaml";
+    std::string meta_data_file = map_dir_ + "/" + kOccFileName + ".yaml";
     std::ofstream yaml(meta_data_file);
     if (!yaml.is_open()) {
         MAP_MANAGER_WARN("Cant not open file: {}", meta_data_file);
@@ -152,7 +235,7 @@ bool MapManager::dumpMap(const OccupancyGridMsgT& map)
     YAML::Emitter e;
     e << YAML::Precision(3);
     e << YAML::BeginMap;
-    e << YAML::Key << "image" << YAML::Value << (occ_file_name + ".pgm");
+    e << YAML::Key << "image" << YAML::Value << (std::string(kOccFileName) + ".pgm");
     e << YAML::Key << "mode" << YAML::Value << "trinary";
     e << YAML::Key << "resolution" << YAML::Value << map.info.resolution;
     e << YAML::Key << "origin" << YAML::Flow << YAML::BeginSeq << map.info.origin.position.x
@@ -176,29 +259,47 @@ bool MapManager::dumpMap(const OccupancyGridMsgT& map)
 void MapManager::publishMap()
 {
     MAP_MANAGER_INFO("publish occ map.");
-    if (!cached_map_) {
+    OccupancyGridMsgT::SharedPtr cached_map;
+    {
+        std::lock_guard<std::mutex> lock(map_mutex_);
+        cached_map = cached_map_;
+    }
+    if (!cached_map) {
         reloadMap();
     }
-    if (!cached_map_) {
+    {
+        std::lock_guard<std::mutex> lock(map_mutex_);
+        cached_map = cached_map_;
+    }
+    if (!cached_map) {
         elog::warn("No occ map yet.");
         return;
     }
-    map_publisher_->publish(*cached_map_);
+    map_publisher_->publish(*cached_map);
 }
 
 void MapManager::handleGetMapService(const std::shared_ptr<GetMapSrvT::Request>,
                             std::shared_ptr<GetMapSrvT::Response> response)
 {
     MAP_MANAGER_INFO("handleGetMap request.");
-    if (!cached_map_) {
+    OccupancyGridMsgT::SharedPtr cached_map;
+    {
+        std::lock_guard<std::mutex> lock(map_mutex_);
+        cached_map = cached_map_;
+    }
+    if (!cached_map) {
         reloadMap();
     }
-    if (!cached_map_) {
+    {
+        std::lock_guard<std::mutex> lock(map_mutex_);
+        cached_map = cached_map_;
+    }
+    if (!cached_map) {
         response->success = false;
         return;
     }
     response->success = true;
-    response->map = *cached_map_;
+    response->map = *cached_map;
 }
 
 void MapManager::handleDumpMapService(const std::shared_ptr<DumpMapSrvT::Request> request,
@@ -208,6 +309,10 @@ void MapManager::handleDumpMapService(const std::shared_ptr<DumpMapSrvT::Request
     if (!success) {
         response->result = false;
         return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(map_mutex_);
+        cached_map_ = std::make_shared<OccupancyGridMsgT>(request->map);
     }
     response->result = true;
 }

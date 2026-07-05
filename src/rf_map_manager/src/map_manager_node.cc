@@ -17,6 +17,20 @@ void MapManagerNode::init()
             manager_->publishMap();
             response->ack = response->OK; // Acknowledge the request
         });
+
+    save_map_service_ = this->create_service<ReqAckSrvT>(
+        "/save_map",
+        [this](const ReqAckSrvT::Request::SharedPtr,
+                const ReqAckSrvT::Response::SharedPtr response) {
+            MAP_MANAGER_INFO("Received request to save cached map");
+            std::string reason;
+            if (!manager_->saveCachedMap(&reason)) {
+                response->ack = response->FAILED;
+                response->reason = reason;
+                return;
+            }
+            response->ack = response->OK;
+        });
 }
 
 } // namespace rf_map_manager

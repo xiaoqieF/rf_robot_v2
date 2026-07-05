@@ -62,7 +62,6 @@ inline constexpr char kOdometryTopic[] = "odom";
 inline constexpr char kNavSatFixTopic[] = "fix";
 inline constexpr char kLandmarkTopic[] = "landmark";
 inline constexpr char kFinishTrajectoryServiceName[] = "finish_trajectory";
-inline constexpr char kOccupancyGridTopic[] = "map";
 inline constexpr char kScanMatchedPointCloudTopic[] = "scan_matched_points2";
 inline constexpr char kSubmapListTopic[] = "submap_list";
 inline constexpr char kTrackedPoseTopic[] = "tracked_pose";

@@ -22,6 +22,7 @@ public:
 private:
     std::unique_ptr<MapManager> manager_;
     rclcpp::Service<ReqAckSrvT>::SharedPtr pub_map_service_;
+    rclcpp::Service<ReqAckSrvT>::SharedPtr save_map_service_;
 };
 
 } // namespace rf_map_manager

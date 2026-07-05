@@ -133,7 +133,7 @@ MapBuilderNode::MapBuilderNode()
     rclcpp::QoS map_qos(1);
     map_qos.transient_local();
     occupancy_grid_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
-        kOccupancyGridTopic, map_qos);
+        "/slam_map", map_qos);
     submap_list_publisher_ = this->create_publisher<SubmapListMsgT>(kSubmapListTopic, 10);
     tracked_pose_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(kTrackedPoseTopic, 10);
     scan_matched_points_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(kScanMatchedPointCloudTopic, 10);

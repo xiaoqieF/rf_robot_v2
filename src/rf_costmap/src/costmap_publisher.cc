@@ -9,7 +9,8 @@ CostmapPublisher::CostmapPublisher(rclcpp::Node::SharedPtr node,
     const std::string& topic_name, Costmap2D* costmap)
     : node_(node), topic_name_(topic_name), costmap_(costmap)
 {
-    publisher_ = node_->create_publisher<nav_msgs::msg::OccupancyGrid>(topic_name_, rclcpp::QoS(1));
+    auto map_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
+    publisher_ = node_->create_publisher<nav_msgs::msg::OccupancyGrid>(topic_name_, map_qos);
     raw_publisher_ = node_->create_publisher<rf_robot_msgs::msg::Costmap>(topic_name_ + "_raw", rclcpp::QoS(1));
 
     if (!cost_trans_table_) {
