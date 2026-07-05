@@ -1,6 +1,6 @@
 # RF Robot V2
 
-这是一个基于 ROS 2 的移动机器人导航与建图工作区，当前代码已经具备一套可运行的基础框架：仿真模型、静态/局部代价地图、全局路径规划、调度转发、地图管理，以及基于 Cartographer 的 2D 建图接入。
+这是一个基于 ROS 2 的移动机器人导航与建图工作区，当前代码已经具备一套可运行的基础框架：仿真模型、静态/局部代价地图、全局路径规划、调度转发、地图管理、纯定位，以及基于 Cartographer 的 2D 建图接入。
 
 仓库里的核心思路不是把所有功能拆成单独进程，而是通过 `rf_main` 把多个自研 node 组合到一个主进程里运行，再配合 `robot_model` 提供 Gazebo 仿真入口。
 
@@ -46,6 +46,7 @@
 - `rf_map_builder`
   对 Cartographer 2D 建图进行了 ROS 2 侧封装，当前已实现：
   从 Lua 配置加载建图参数；
+  默认从 `src/rf_map_builder/config` 提供 Cartographer Lua 配置依赖；
   通过 `/build_map` 服务启动 trajectory；
   订阅 `scan`、`points2`、`odom`、`imu`、`landmark`；
   发布 `submap_list`、`tracked_pose`、`scan_matched_points2`；
@@ -57,6 +58,7 @@
   定位方法可选框架；
   基于静态 `/map` + `scan` + `odom` 的 2D ICP 定位；
   发布定位位姿；
+  发布配准后的 `localized_scan`；
   发布 `map -> odom` TF；
   通过 `/localization_control` 服务启停定位。
 
@@ -146,6 +148,7 @@
   `/local_costmap_raw`
   `/global_path`
   `localization_pose`
+  `localized_scan`
   `submap_list`
   `tracked_pose`
   `scan_matched_points2`
@@ -197,9 +200,21 @@
 - 默认配置文件：
   `src/rf_map_builder/config/default_map_builder_cfg.lua`
 
+- 配置依赖文件位于：
+  `src/rf_map_builder/config/map_builder.lua`
+  `src/rf_map_builder/config/pose_graph.lua`
+  `src/rf_map_builder/config/trajectory_builder.lua`
+  `src/rf_map_builder/config/trajectory_builder_2d.lua`
+  `src/rf_map_builder/config/trajectory_builder_3d.lua`
+
 - 运行时搜索路径顺序：
   `rf_map_builder` 包内 `share/.../config`
   `~/.rf_robot/config`
+
+- 推荐修改方式：
+  优先修改 `src/rf_map_builder/config/` 下的 Lua；
+  或复制一份到 `~/.rf_robot/config` 做运行时覆盖；
+  不再推荐直接修改 `src/cartographer/configuration_files/`。
 
 - 默认配置启用了：
   2D trajectory builder
@@ -208,6 +223,42 @@
   `use_odometry = true`
   `use_imu_data = true`
   `num_laser_scans = 1`
+
+### 纯定位配置
+
+- `rf_localization` 默认订阅：
+  `/map`
+  `scan`
+  `odom`
+
+- `rf_localization` 默认发布：
+  `localization_pose`
+  `localized_scan`
+  `map -> odom`
+
+- 关键节点参数：
+  `localization_method = icp`
+  `map_frame = map`
+  `odom_frame = odom`
+  `base_frame = base_link`
+  `tf_publish_period_sec = 0.05`
+  `tf_lookup_timeout_sec = 0.1`
+  `initial_pose.x = 0.0`
+  `initial_pose.y = 0.0`
+  `initial_pose.yaw = 0.0`
+  `publish_aligned_scan = true`
+  `autostart = true`
+
+- 当前 ICP 参数默认值：
+  `icp.map_occupied_threshold = 65`
+  `icp.min_scan_points = 20`
+  `icp.map_voxel_leaf_size = 0.05`
+  `icp.scan_voxel_leaf_size = 0.05`
+  `icp.max_correspondence_distance = 0.5`
+  `icp.transformation_epsilon = 1e-4`
+  `icp.fitness_epsilon = 1e-3`
+  `icp.fitness_score_threshold = 0.3`
+  `icp.max_iterations = 50`
 
 ## 快速开始
 
@@ -259,7 +310,23 @@ ros2 service call /global_map_control rf_robot_msgs/srv/ReqAck "{trigger: 0}"
 ros2 service call /local_map_control rf_robot_msgs/srv/ReqAck "{trigger: 0}"
 ```
 
-### 6. 发送目标点
+### 6. 启停纯定位
+
+```bash
+ros2 service call /localization_control rf_robot_msgs/srv/ReqAck "{trigger: 0}"  # START
+ros2 service call /localization_control rf_robot_msgs/srv/ReqAck "{trigger: 1}"  # STOP
+```
+
+如果需要给 `rf_localization` 指定初始位姿，可以在启动时覆盖参数，例如：
+
+```bash
+ros2 run rf_main rf_main --ros-args \
+  -p localization_node:initial_pose.x:=1.0 \
+  -p localization_node:initial_pose.y:=2.0 \
+  -p localization_node:initial_pose.yaw:=0.5
+```
+
+### 7. 发送目标点
 
 可以向 `/goal_pose` 发布 `geometry_msgs/msg/PoseStamped`，调度节点会自动转发给全局规划器。
 
