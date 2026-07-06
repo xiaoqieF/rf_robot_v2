@@ -9,6 +9,7 @@
 - `rf_main`
   统一启动并托管以下节点：
   `rf_global_map`、`rf_local_map`、`rf_localization`、`rf_map_manager`、`rf_global_planner`、`rf_scheduler_node`、`rf_map_builder`。
+  现在额外包含 `rf_local_planner`，用于局部路径跟踪与速度控制。
 
 - `rf_costmap`
   提供代价地图基础库，已经实现：
@@ -38,6 +39,16 @@
   路径发布到 `/global_path`；
   支持从 TF 获取当前位置作为起点；
   支持目标点容差搜索。
+
+- `rf_local_planner`
+  提供一个尽量简单的 DWA 局部控制器，当前已经实现：
+  订阅 `/local_costmap_raw`、`odom`；
+  使用动态窗口采样线速度和角速度；
+  对候选轨迹执行前向仿真、碰撞检查和路径/目标/障碍打分；
+  通过 `/follow_path` action 接收全局轨迹并持续跟踪；
+  发布 `/cmd_vel`；
+  发布调试轨迹 `/local_trajectory`；
+  通过 `/local_planner_control` 服务启停局部规划。
 
 - `rf_scheduler_node`
   订阅 `/goal_pose`，把收到的目标点转发为 `/compute_path_to_pose` action 请求。
@@ -73,7 +84,7 @@
   已定义项目内部使用的消息、服务和 action，包括：
   `Costmap`、`SubmapList`、`LandmarkList`、
   `GetMap`、`DumpMap`、`ReqAck`、
-  `ComputePathToPose`、`ComputePathThroughPoses`。
+  `ComputePathToPose`、`ComputePathThroughPoses`、`FollowPath`。
 
 ## 仓库结构
 
@@ -101,6 +112,9 @@
 - `src/rf_scheduler_node`
   简单调度层，把 `/goal_pose` 转换为规划请求。
 
+- `src/rf_local_planner`
+  简化版 DWA 局部控制器。
+
 - `src/rf_map_builder`
   Cartographer 2D 建图接入层。
 
@@ -124,9 +138,10 @@
 2. `rf_global_map` 订阅 `/map`，生成 `/global_costmap` 和 `/global_costmap_raw`。
 3. `rf_local_map` 基于 `/scan` 和 TF 生成 `/local_costmap` 与 `/local_costmap_raw`。
 4. `rf_global_planner` 订阅 `/global_costmap_raw`，对外提供路径规划 action。
-5. `rf_scheduler_node` 监听 `/goal_pose`，调用规划 action。
-6. `rf_localization` 订阅静态地图、激光和里程计，执行纯定位并维护 `map -> odom` TF。
-7. `rf_map_builder` 独立接入传感器与 TF，维护 Cartographer trajectory，发布位姿、子图和点云结果。
+5. `rf_scheduler_node` 监听 `/goal_pose`，先调用全局规划 action，再把返回路径转发给局部规划 action。
+6. `rf_local_planner` 接收 `/follow_path` action 与 `/local_costmap_raw`，输出 `/cmd_vel`。
+7. `rf_localization` 订阅静态地图、激光和里程计，执行纯定位并维护 `map -> odom` TF。
+8. `rf_map_builder` 独立接入传感器与 TF，维护 Cartographer trajectory，发布位姿、子图和点云结果。
 
 ## 关键接口
 
@@ -147,6 +162,8 @@
   `/local_costmap`
   `/local_costmap_raw`
   `/global_path`
+  `/local_trajectory`
+  `/cmd_vel`
   `localization_pose`
   `localized_scan`
   `submap_list`
@@ -176,6 +193,9 @@
 - `/localization_control`
   启停纯定位节点。
 
+- `/local_planner_control`
+  启停局部规划与控制输出。
+
 ### Actions
 
 - `/compute_path_to_pose`
@@ -183,6 +203,9 @@
 
 - `/compute_path_through_poses`
   计算经过多个途经点的全局路径。
+
+- `/follow_path`
+  执行局部轨迹跟踪并输出速度控制。
 
 ## 默认配置与行为
 

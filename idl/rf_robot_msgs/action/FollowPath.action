@@ -1,0 +1,17 @@
+#goal definition
+nav_msgs/Path path
+---
+#result definition
+uint16 NONE=0
+uint16 INVALID_PATH=401
+uint16 TF_ERROR=402
+uint16 NO_VALID_CONTROL=403
+uint16 CANCELED=404
+uint16 UNKNOWN=499
+
+builtin_interfaces/Duration tracking_time
+uint16 error_code
+string error_msg
+---
+#feedback definition
+float32 distance_to_goal

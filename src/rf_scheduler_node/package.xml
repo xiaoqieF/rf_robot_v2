@@ -9,6 +9,8 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
   <depend>rf_robot_msgs</depend>
   <depend>elog</depend>
   <depend>rf_util</depend>

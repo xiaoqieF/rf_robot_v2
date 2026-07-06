@@ -27,6 +27,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ReqAck.srv"
   "action/ComputePathToPose.action"
   "action/ComputePathThroughPoses.action"
+  "action/FollowPath.action"
   DEPENDENCIES
   builtin_interfaces
   std_msgs

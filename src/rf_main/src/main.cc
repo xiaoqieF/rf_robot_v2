@@ -3,6 +3,7 @@
 #include "rf_localization/localization_node.hpp"
 #include "rf_map_manager/map_manager_node.hpp"
 #include "rf_global_planner/global_planner_node.hpp"
+#include "rf_local_planner/local_planner_node.hpp"
 #include "rf_scheduler_node/scheduler_node.hpp"
 #include "rf_map_builder/map_builder_node.hpp"
 #include "elog/elog.h"
@@ -20,6 +21,7 @@ int main(int argc, char **argv)
     auto localization_node = std::make_shared<rf_localization::LocalizationNode>();
     auto map_manager_node = std::make_shared<rf_map_manager::MapManagerNode>();
     auto global_planner_node = std::make_shared<rf_global_planner::GlobalPlannerNode>();
+    auto local_planner_node = std::make_shared<rf_local_planner::LocalPlannerNode>();
     auto sched_node = std::make_shared<rf_scheduler::SchedulerNode>();
     auto map_builder_node = std::make_shared<rf_map_builder::MapBuilderNode>();
 
@@ -28,6 +30,7 @@ int main(int argc, char **argv)
     localization_node->init();
     map_manager_node->init();
     global_planner_node->init();
+    local_planner_node->init();
     sched_node->init();
     map_builder_node->init();
 
@@ -45,6 +48,7 @@ int main(int argc, char **argv)
     auto scheduler_executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
     scheduler_executor->add_node(sched_node);
     scheduler_executor->add_node(global_planner_node);
+    scheduler_executor->add_node(local_planner_node);
 
     std::thread spin_thread2([&]() {
         pthread_setname_np(pthread_self(), "spin_thread2");
