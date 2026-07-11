@@ -387,8 +387,8 @@
             <wheel_radius>0.032</wheel_radius>
 
             <!-- 限制参数 -->
-            <max_wheel_torque>2.0</max_wheel_torque>
-            <max_wheel_acceleration>0.5</max_wheel_acceleration>
+            <max_wheel_torque>4.0</max_wheel_torque>
+            <max_wheel_acceleration>2.5</max_wheel_acceleration>
 
             <!-- 发布选项 -->
             <publish_odom>false</publish_odom>

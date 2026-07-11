@@ -46,7 +46,7 @@ private:
                  unsigned int src_x, unsigned int src_y);
 
 private:
-    const double inflation_radius{0.35};
+    const double inflation_radius{0.25};
     const double inscribed_radius{0.12};
     const double cost_scaling_factor{3.0};
 

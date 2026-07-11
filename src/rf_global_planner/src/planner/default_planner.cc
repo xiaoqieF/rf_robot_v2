@@ -11,11 +11,24 @@
 namespace rf_global_planner
 {
 
+namespace
+{
+
+geometry_msgs::msg::Quaternion quaternionFromYaw(double yaw)
+{
+    geometry_msgs::msg::Quaternion quaternion;
+    quaternion.z = std::sin(yaw * 0.5);
+    quaternion.w = std::cos(yaw * 0.5);
+    return quaternion;
+}
+
+} // namespace
+
 static constexpr uint8_t NO_INFORMATION = 255;
 static constexpr uint8_t LETHAL_OBSTACLE = 254;
 static constexpr uint8_t INSCRIBED_INFLATED_OBSTACLE = 253;
 static constexpr uint8_t FREE_SPACE = 0;
-static constexpr uint8_t COST_NEUTRAL = 50;
+static constexpr double OBSTACLE_COST_WEIGHT = 8.0;
 
 void DefaultPlanner::init(std::shared_ptr<tf2_ros::Buffer> tf_buffer)
 {
@@ -57,7 +70,7 @@ std::pair<PlanErrorCode, nav_msgs::msg::Path> DefaultPlanner::getPlan(
     searchPlan(mx_start, my_start, mx_goal, my_goal);
 
     if (found_) {
-        return {PlanErrorCode::OK, backtracePath(mx_start, my_start, mx_goal, my_goal)};
+        return {PlanErrorCode::OK, backtracePath(mx_start, my_start, mx_goal, my_goal, goal)};
     }
 
     if (tolerance == 0) {
@@ -95,7 +108,7 @@ std::pair<PlanErrorCode, nav_msgs::msg::Path> DefaultPlanner::getPlan(
     }
 
     G_PLANNER_INFO("Find alternate goal: ({}, {})", best_x, best_y);
-    return {PlanErrorCode::OK, backtracePath(mx_start, my_start, best_x, best_y)};
+    return {PlanErrorCode::OK, backtracePath(mx_start, my_start, best_x, best_y, goal)};
 }
 
 void DefaultPlanner::searchPlan(
@@ -147,7 +160,19 @@ void DefaultPlanner::searchPlan(
                 continue;
             }
 
-            double tentative_g = g_scores_[cur_idx] + cost[i] + costmap_->data[n_idx] / 255.0;
+            if (dx[i] != 0 && dy[i] != 0) {
+                const int side_x_idx = getIndex(current.x + dx[i], current.y);
+                const int side_y_idx = getIndex(current.x, current.y + dy[i]);
+                if (costmap_->data[side_x_idx] == LETHAL_OBSTACLE ||
+                    costmap_->data[side_y_idx] == LETHAL_OBSTACLE) {
+                    continue;
+                }
+            }
+
+            const double obstacle_penalty =
+                OBSTACLE_COST_WEIGHT * static_cast<double>(costmap_->data[n_idx]) /
+                static_cast<double>(INSCRIBED_INFLATED_OBSTACLE);
+            double tentative_g = g_scores_[cur_idx] + cost[i] + obstacle_penalty;
 
             if (tentative_g < g_scores_[n_idx]) {
                 g_scores_[n_idx] = tentative_g;
@@ -165,7 +190,11 @@ void DefaultPlanner::searchPlan(
 }
 
 nav_msgs::msg::Path DefaultPlanner::backtracePath(
-    int mx_start, int my_start, int mx_goal, int my_goal)
+    int mx_start,
+    int my_start,
+    int mx_goal,
+    int my_goal,
+    const geometry_msgs::msg::PoseStamped& goal)
 {
     nav_msgs::msg::Path path;
     path.header.frame_id = "map";
@@ -207,6 +236,27 @@ nav_msgs::msg::Path DefaultPlanner::backtracePath(
     G_PLANNER_INFO("Backtrace Path success, length: {}", path.poses.size());
 
     std::reverse(path.poses.begin(), path.poses.end());
+
+    if (path.poses.empty()) {
+        return path;
+    }
+
+    path.poses.back().pose.orientation = goal.pose.orientation;
+
+    for (std::size_t i = path.poses.size() - 1; i > 0; --i) {
+        const auto& prev = path.poses[i - 1].pose.position;
+        const auto& cur = path.poses[i].pose.position;
+        const double dx = cur.x - prev.x;
+        const double dy = cur.y - prev.y;
+
+        if (std::hypot(dx, dy) <= std::numeric_limits<double>::epsilon()) {
+            path.poses[i - 1].pose.orientation = path.poses[i].pose.orientation;
+            continue;
+        }
+
+        path.poses[i - 1].pose.orientation = quaternionFromYaw(std::atan2(dy, dx));
+    }
+
     return path;
 }
 
@@ -215,18 +265,14 @@ void DefaultPlanner::preprocessCostmap()
     int width = costmap_->metadata.size_x;
     int height = costmap_->metadata.size_y;
 
-    // Convert INSCRIBED_INFLATED_OBSTACLE to LETHAL_OBSTACLE
-    // Convert FREE_SPACE to COST_NEUTRAL
+    // Treat the inscribed obstacle band and unknown cells as blocked.
+    // Keep the remaining inflation gradient intact so A* can prefer paths with more clearance.
     for (int j = 0; j < height; j++) {
         for (int i = 0; i < width; i++) {
-            if (costmap_->data[getIndex(i, j)] >= INSCRIBED_INFLATED_OBSTACLE) {
-                costmap_->data[getIndex(i, j)] = LETHAL_OBSTACLE;
-            } else {
-                int v = COST_NEUTRAL + 0.8 * costmap_->data[getIndex(i, j)];
-                if (v >= LETHAL_OBSTACLE) {
-                    v = LETHAL_OBSTACLE - 1;
-                }
-                costmap_->data[getIndex(i, j)] = v;
+            const auto index = getIndex(i, j);
+            if (costmap_->data[index] == NO_INFORMATION ||
+                costmap_->data[index] >= INSCRIBED_INFLATED_OBSTACLE) {
+                costmap_->data[index] = LETHAL_OBSTACLE;
             }
         }
     }

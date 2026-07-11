@@ -42,7 +42,12 @@ public:
 
 private:
     void searchPlan(int mx_start, int my_start, int mx_goal, int my_goal);
-    nav_msgs::msg::Path backtracePath(int mx_start, int my_start, int mx_goal, int my_goal);
+    nav_msgs::msg::Path backtracePath(
+        int mx_start,
+        int my_start,
+        int mx_goal,
+        int my_goal,
+        const geometry_msgs::msg::PoseStamped& goal);
 
     bool worldToMap(double wx, double wy, int& mx, int& my)
     {

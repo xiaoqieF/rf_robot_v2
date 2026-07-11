@@ -37,28 +37,26 @@ public:
 private:
     struct Options
     {
-        double control_frequency = 10.0;
-        double sim_time = 1.5;
-        double sim_granularity = 0.1;
+        double control_frequency = 20.0;
+        double sim_time = 1.0;                  // Time horizon for simulating trajectories, in seconds
+        double sim_granularity = 0.05;           // Time step for simulating trajectories, in seconds
         int vx_samples = 6;
         int vtheta_samples = 15;
-        double max_vel_x = 0.35;
-        double min_vel_x = 0.0;
+        double max_vel_x = 0.28;
+        double min_vel_x = -0.08;
         double max_vel_theta = 1.2;
         double min_vel_theta = -1.2;
-        double acc_lim_x = 0.6;
-        double acc_lim_theta = 1.8;
-        double robot_radius = 0.18;
-        double path_distance_bias = 2.0;
+        double acc_lim_x = 0.5;
+        double acc_lim_theta = 1.2;
+        double path_distance_bias = 3.0;
         double goal_distance_bias = 2.5;
-        double obstacle_cost_bias = 3.0;
+        double obstacle_cost_bias = 4.0;
         double speed_bias = 0.4;
         double heading_bias = 0.8;
-        double local_goal_distance = 1.2;
+        double local_goal_distance = 0.6;       // Choose a point on the global path that is this distance away from the robot as the local goal
         double goal_tolerance_xy = 0.15;
-        double goal_tolerance_yaw = 0.20;
+        double goal_tolerance_yaw = 0.10;
         int max_no_control_cycles = 20;
-        bool autostart = true;
     };
 
     struct Pose2D
@@ -85,8 +83,6 @@ private:
 private:
     void handleLocalCostmap(const CostmapMsgT::SharedPtr msg);
     void handleOdometry(const OdomMsgT::SharedPtr msg);
-    void handleControlRequest(const ReqAckSrvT::Request::SharedPtr request,
-                              const ReqAckSrvT::Response::SharedPtr response);
     void handleFollowPath();
     void publishZeroVelocity();
     void publishTrajectory(const TrajectorySample& sample, const std::string& frame_id);
@@ -127,7 +123,6 @@ private:
     rclcpp::Subscription<OdomMsgT>::SharedPtr odom_sub_;
     rclcpp::Publisher<TwistMsgT>::SharedPtr cmd_vel_pub_;
     rclcpp::Publisher<PathMsgT>::SharedPtr local_traj_pub_;
-    rclcpp::Service<ReqAckSrvT>::SharedPtr control_service_;
     rf_util::SimpleActionServer<ActionFollowPath>::UniquePtr follow_path_server_;
 
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -136,7 +131,6 @@ private:
     mutable std::mutex data_mutex_;
     CostmapMsgT::SharedPtr local_costmap_msg_;
     OdomMsgT::SharedPtr odom_msg_;
-    bool active_ = true;
     bool zero_cmd_published_ = false;
 };
 

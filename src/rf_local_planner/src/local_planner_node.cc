@@ -29,7 +29,6 @@ LocalPlannerNode::LocalPlannerNode()
     options_.min_vel_theta = this->declare_parameter<double>("min_vel_theta", options_.min_vel_theta);
     options_.acc_lim_x = this->declare_parameter<double>("acc_lim_x", options_.acc_lim_x);
     options_.acc_lim_theta = this->declare_parameter<double>("acc_lim_theta", options_.acc_lim_theta);
-    options_.robot_radius = this->declare_parameter<double>("robot_radius", options_.robot_radius);
     options_.path_distance_bias = this->declare_parameter<double>("path_distance_bias", options_.path_distance_bias);
     options_.goal_distance_bias = this->declare_parameter<double>("goal_distance_bias", options_.goal_distance_bias);
     options_.obstacle_cost_bias = this->declare_parameter<double>("obstacle_cost_bias", options_.obstacle_cost_bias);
@@ -39,9 +38,7 @@ LocalPlannerNode::LocalPlannerNode()
     options_.goal_tolerance_xy = this->declare_parameter<double>("goal_tolerance_xy", options_.goal_tolerance_xy);
     options_.goal_tolerance_yaw = this->declare_parameter<double>("goal_tolerance_yaw", options_.goal_tolerance_yaw);
     options_.max_no_control_cycles = this->declare_parameter<int>("max_no_control_cycles", options_.max_no_control_cycles);
-    options_.autostart = this->declare_parameter<bool>("autostart", options_.autostart);
 
-    active_ = options_.autostart;
 }
 
 void LocalPlannerNode::init()
@@ -61,10 +58,6 @@ void LocalPlannerNode::init()
     cmd_vel_pub_ = this->create_publisher<TwistMsgT>("/cmd_vel", 10);
     local_traj_pub_ = this->create_publisher<PathMsgT>("/local_trajectory", 10);
 
-    control_service_ = this->create_service<ReqAckSrvT>(
-        "/local_planner_control",
-        std::bind(&LocalPlannerNode::handleControlRequest, this, std::placeholders::_1, std::placeholders::_2));
-
     follow_path_server_ = std::make_unique<rf_util::SimpleActionServer<ActionFollowPath>>(
         shared_from_this(),
         "/follow_path",
@@ -73,7 +66,7 @@ void LocalPlannerNode::init()
         }
     );
 
-    L_PLANNER_INFO("Initialized simple DWA local planner action server. autostart: {}", active_);
+    L_PLANNER_INFO("Initialized simple DWA local planner action server.");
 }
 
 void LocalPlannerNode::handleLocalCostmap(const CostmapMsgT::SharedPtr msg)
@@ -86,28 +79,6 @@ void LocalPlannerNode::handleOdometry(const OdomMsgT::SharedPtr msg)
 {
     std::lock_guard<std::mutex> lock(data_mutex_);
     odom_msg_ = msg;
-}
-
-void LocalPlannerNode::handleControlRequest(
-    const ReqAckSrvT::Request::SharedPtr request,
-    const ReqAckSrvT::Response::SharedPtr response)
-{
-    if (request == nullptr || response == nullptr) {
-        return;
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(data_mutex_);
-        active_ = (request->trigger == ReqAckSrvT::Request::START);
-    }
-
-    if (!active_) {
-        publishZeroVelocity();
-    }
-
-    response->ack = ReqAckSrvT::Response::OK;
-    response->reason = active_ ? "local planner started" : "local planner stopped";
-    L_PLANNER_INFO("Local planner {}.", active_ ? "started" : "stopped");
 }
 
 void LocalPlannerNode::handleFollowPath()
@@ -127,7 +98,9 @@ void LocalPlannerNode::handleFollowPath()
     int no_control_cycles = 0;
     rclcpp::Rate rate(std::max(1.0, options_.control_frequency));
 
+    // Main control loop
     while (rclcpp::ok()) {
+        // Check for cancellation or preemption
         if (follow_path_server_->isCancelRequested()) {
             result->tracking_time = this->now() - start_time;
             result->error_code = ActionFollowPath::Result::CANCELED;
@@ -154,23 +127,12 @@ void LocalPlannerNode::handleFollowPath()
             L_PLANNER_INFO("Accepted preempted follow path goal with {} poses.", plan.poses.size());
         }
 
-        bool active = true;
         CostmapMsgT::SharedPtr costmap_msg;
         OdomMsgT::SharedPtr odom_msg;
         {
             std::lock_guard<std::mutex> lock(data_mutex_);
-            active = active_;
             costmap_msg = local_costmap_msg_;
             odom_msg = odom_msg_;
-        }
-
-        if (!active) {
-            result->tracking_time = this->now() - start_time;
-            result->error_code = ActionFollowPath::Result::UNKNOWN;
-            result->error_msg = "local planner stopped by control service";
-            follow_path_server_->terminateCurrent(result);
-            publishZeroVelocity();
-            return;
         }
 
         if (!costmap_msg || !odom_msg) {
@@ -186,6 +148,7 @@ void LocalPlannerNode::handleFollowPath()
             continue;
         }
 
+        // 1. Prune the plan to get the local segment, find the nearest point to the robot and remove all previous points
         auto plan_segment = prunePlan(plan, robot_pose);
         if (plan_segment.empty()) {
             result->tracking_time = this->now() - start_time;
@@ -206,6 +169,7 @@ void LocalPlannerNode::handleFollowPath()
         feedback->distance_to_goal = static_cast<float>(goal_distance);
         follow_path_server_->publishFeedback(feedback);
 
+        // 2. Check if the robot is within the goal tolerance, if so, stop and succeed
         if (goal_distance <= options_.goal_tolerance_xy) {
             if (std::abs(goal_yaw_error) <= options_.goal_tolerance_yaw) {
                 publishZeroVelocity();
@@ -221,6 +185,7 @@ void LocalPlannerNode::handleFollowPath()
             continue;
         }
 
+        // 3. Find the best trajectory
         auto local_goal = selectLocalGoal(plan_segment);
         auto best = findBestTrajectory(robot_pose, *odom_msg, *costmap_msg, plan_segment, local_goal);
         if (best.collision || best.poses.empty()) {
@@ -375,6 +340,7 @@ LocalPlannerNode::TrajectorySample LocalPlannerNode::findBestTrajectory(
     const int vx_samples = std::max(1, options_.vx_samples);
     const int vtheta_samples = std::max(1, options_.vtheta_samples);
 
+    // For each sampled linear and angular velocity, simulate the trajectory and evaluate its cost
     for (int i = 0; i < vx_samples; ++i) {
         const double linear_vel = (vx_samples == 1)
             ? window_max_v
@@ -478,42 +444,26 @@ double LocalPlannerNode::computePathDistance(
 
 bool LocalPlannerNode::isCollision(const Pose2D& pose, const CostmapMsgT& costmap, double* max_cost) const
 {
-    const int radius_cells = std::max(
-        1,
-        static_cast<int>(std::ceil(options_.robot_radius / costmap.metadata.resolution)));
-    double local_max_cost = 0.0;
-
-    for (int dx = -radius_cells; dx <= radius_cells; ++dx) {
-        for (int dy = -radius_cells; dy <= radius_cells; ++dy) {
-            const double offset_x = static_cast<double>(dx) * costmap.metadata.resolution;
-            const double offset_y = static_cast<double>(dy) * costmap.metadata.resolution;
-            if ((offset_x * offset_x + offset_y * offset_y) > (options_.robot_radius * options_.robot_radius)) {
-                continue;
-            }
-
-            unsigned int mx = 0;
-            unsigned int my = 0;
-            if (!worldToMap(costmap, pose.x + offset_x, pose.y + offset_y, mx, my)) {
-                return true;
-            }
-
-            const auto index = my * costmap.metadata.size_x + mx;
-            if (index >= costmap.data.size()) {
-                return true;
-            }
-
-            const uint8_t cell_cost = costmap.data[index];
-            local_max_cost = std::max(local_max_cost, static_cast<double>(cell_cost));
-            if (cell_cost == rf_costmap::NO_INFORMATION || cell_cost >= rf_costmap::INSCRIBED_INFLATED_OBSTACLE) {
-                return true;
-            }
-        }
+    // The local costmap is already inflated using the robot footprint, so
+    // checking the center cell is sufficient to determine if the robot is in collision.
+    unsigned int mx = 0;
+    unsigned int my = 0;
+    if (!worldToMap(costmap, pose.x, pose.y, mx, my)) {
+        return true;
     }
 
+    const auto index = my * costmap.metadata.size_x + mx;
+    if (index >= costmap.data.size()) {
+        return true;
+    }
+
+    const uint8_t cell_cost = costmap.data[index];
     if (max_cost != nullptr) {
-        *max_cost = local_max_cost;
+        *max_cost = static_cast<double>(cell_cost);
     }
-    return false;
+
+    return cell_cost == rf_costmap::NO_INFORMATION ||
+        cell_cost >= rf_costmap::INSCRIBED_INFLATED_OBSTACLE;
 }
 
 bool LocalPlannerNode::worldToMap(
