@@ -52,8 +52,8 @@ private:
         double acc_lim_theta = 10.0;
         double path_distance_bias = 0.5;
         double goal_distance_bias = 1.0;
-        double obstacle_cost_bias = 10.0;
-        double progress_bias = 30.0;
+        double obstacle_cost_bias = 5.0;
+        double progress_bias = 15.0;
         double speed_bias = 0.5;
         double heading_bias = 0.5;
         double local_goal_distance = 0.3;       // Choose a point on the global path that is this distance away from the robot as the local goal
