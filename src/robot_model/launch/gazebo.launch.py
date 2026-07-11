@@ -63,7 +63,6 @@ def generate_launch_description():
     rf_main_node = Node(
         package='rf_main',
         executable='rf_main',
-        name='rf_main',
         output='screen',
         emulate_tty=True,
         parameters=[{

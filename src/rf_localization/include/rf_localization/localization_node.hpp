@@ -46,6 +46,10 @@ private:
         double initial_pose_x = 0.0;
         double initial_pose_y = 0.0;
         double initial_pose_yaw = 0.0;
+        double max_map_to_odom_translation_jump = 0.08;
+        double max_map_to_odom_yaw_jump = 0.08;
+        double map_to_odom_smoothing_alpha = 0.2;
+        bool reject_large_map_to_odom_jump = true;
         bool publish_aligned_scan = true;
         bool autostart = true;
     };
@@ -67,6 +71,12 @@ private:
     std::optional<Eigen::Matrix4f> computeOdomToBase(const nav_msgs::msg::Odometry& msg) const;
     Eigen::Matrix4f makePlanarTransform(double x, double y, double yaw) const;
     Eigen::Matrix4f normalizePlanarTransform(const Eigen::Matrix4f& transform) const;
+    Eigen::Matrix4f blendPlanarTransform(
+        const Eigen::Matrix4f& current,
+        const Eigen::Matrix4f& target,
+        double alpha) const;
+    double planarTransformYaw(const Eigen::Matrix4f& transform) const;
+    double normalizeAngle(double angle) const;
     geometry_msgs::msg::Pose matrixToPose(const Eigen::Matrix4f& transform) const;
     geometry_msgs::msg::Transform matrixToTransform(const Eigen::Matrix4f& transform) const;
 

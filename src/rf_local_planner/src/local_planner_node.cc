@@ -32,13 +32,17 @@ LocalPlannerNode::LocalPlannerNode()
     options_.path_distance_bias = this->declare_parameter<double>("path_distance_bias", options_.path_distance_bias);
     options_.goal_distance_bias = this->declare_parameter<double>("goal_distance_bias", options_.goal_distance_bias);
     options_.obstacle_cost_bias = this->declare_parameter<double>("obstacle_cost_bias", options_.obstacle_cost_bias);
+    options_.progress_bias = this->declare_parameter<double>("progress_bias", options_.progress_bias);
     options_.speed_bias = this->declare_parameter<double>("speed_bias", options_.speed_bias);
     options_.heading_bias = this->declare_parameter<double>("heading_bias", options_.heading_bias);
     options_.local_goal_distance = this->declare_parameter<double>("local_goal_distance", options_.local_goal_distance);
     options_.goal_tolerance_xy = this->declare_parameter<double>("goal_tolerance_xy", options_.goal_tolerance_xy);
     options_.goal_tolerance_yaw = this->declare_parameter<double>("goal_tolerance_yaw", options_.goal_tolerance_yaw);
     options_.max_no_control_cycles = this->declare_parameter<int>("max_no_control_cycles", options_.max_no_control_cycles);
-
+    options_.publish_debug_trajectories = this->declare_parameter<bool>(
+        "publish_debug_trajectories", options_.publish_debug_trajectories);
+    parameter_callback_handle_ = this->add_on_set_parameters_callback(
+        std::bind(&LocalPlannerNode::handleParameterUpdate, this, std::placeholders::_1));
 }
 
 void LocalPlannerNode::init()
@@ -57,6 +61,8 @@ void LocalPlannerNode::init()
 
     cmd_vel_pub_ = this->create_publisher<TwistMsgT>("/cmd_vel", 10);
     local_traj_pub_ = this->create_publisher<PathMsgT>("/local_trajectory", 10);
+    debug_traj_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "/local_trajectories_debug", 10);
 
     follow_path_server_ = std::make_unique<rf_util::SimpleActionServer<ActionFollowPath>>(
         shared_from_this(),
@@ -96,10 +102,12 @@ void LocalPlannerNode::handleFollowPath()
     PathMsgT plan = goal->path;
     auto start_time = this->now();
     int no_control_cycles = 0;
-    rclcpp::Rate rate(std::max(1.0, options_.control_frequency));
 
     // Main control loop
     while (rclcpp::ok()) {
+        const auto options = getOptions();
+        rclcpp::Rate rate(std::max(1.0, options.control_frequency));
+
         // Check for cancellation or preemption
         if (follow_path_server_->isCancelRequested()) {
             result->tracking_time = this->now() - start_time;
@@ -170,8 +178,8 @@ void LocalPlannerNode::handleFollowPath()
         follow_path_server_->publishFeedback(feedback);
 
         // 2. Check if the robot is within the goal tolerance, if so, stop and succeed
-        if (goal_distance <= options_.goal_tolerance_xy) {
-            if (std::abs(goal_yaw_error) <= options_.goal_tolerance_yaw) {
+        if (goal_distance <= options.goal_tolerance_xy) {
+            if (std::abs(goal_yaw_error) <= options.goal_tolerance_yaw) {
                 publishZeroVelocity();
                 result->tracking_time = this->now() - start_time;
                 result->error_code = ActionFollowPath::Result::NONE;
@@ -187,11 +195,19 @@ void LocalPlannerNode::handleFollowPath()
 
         // 3. Find the best trajectory
         auto local_goal = selectLocalGoal(plan_segment);
-        auto best = findBestTrajectory(robot_pose, *odom_msg, *costmap_msg, plan_segment, local_goal);
+        std::vector<TrajectorySample> debug_samples;
+        auto* debug_samples_ptr = options.publish_debug_trajectories ? &debug_samples : nullptr;
+        auto best = findBestTrajectory(robot_pose, *odom_msg, *costmap_msg, plan_segment, local_goal, debug_samples_ptr);
+        const auto debug_frame_id = plan.header.frame_id.empty() ? "map" : plan.header.frame_id;
+        if (options.publish_debug_trajectories) {
+            publishDebugTrajectories(debug_samples, best.collision ? nullptr : &best, debug_frame_id);
+        } else if (debug_markers_active_) {
+            clearDebugTrajectories();
+        }
         if (best.collision || best.poses.empty()) {
             ++no_control_cycles;
             publishZeroVelocity();
-            if (no_control_cycles >= std::max(1, options_.max_no_control_cycles)) {
+            if (no_control_cycles >= std::max(1, options.max_no_control_cycles)) {
                 result->tracking_time = this->now() - start_time;
                 result->error_code = ActionFollowPath::Result::NO_VALID_CONTROL;
                 result->error_msg = "failed to find a feasible local trajectory";
@@ -251,13 +267,234 @@ void LocalPlannerNode::publishTrajectory(const TrajectorySample& sample, const s
     local_traj_pub_->publish(traj_msg);
 }
 
+void LocalPlannerNode::publishDebugTrajectories(
+    const std::vector<TrajectorySample>& samples,
+    const TrajectorySample* best,
+    const std::string& frame_id)
+{
+    if (!debug_traj_pub_) {
+        return;
+    }
+
+    visualization_msgs::msg::MarkerArray marker_array;
+
+    visualization_msgs::msg::Marker clear_marker;
+    clear_marker.action = visualization_msgs::msg::Marker::DELETEALL;
+    marker_array.markers.push_back(clear_marker);
+
+    const auto stamp = this->now();
+    int marker_id = 0;
+    for (const auto& sample : samples) {
+        if (sample.poses.empty()) {
+            continue;
+        }
+
+        visualization_msgs::msg::Marker marker;
+        marker.header.stamp = stamp;
+        marker.header.frame_id = frame_id.empty() ? "map" : frame_id;
+        marker.ns = "dwa_samples";
+        marker.id = marker_id++;
+        marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        marker.action = visualization_msgs::msg::Marker::ADD;
+        marker.scale.x = 0.01;
+        marker.pose.orientation.w = 1.0;
+
+        marker.color.r = sample.collision ? 1.0f : 0.1f;
+        marker.color.g = sample.collision ? 0.2f : 0.9f;
+        marker.color.b = 0.1f;
+        marker.color.a = sample.collision ? 0.35f : 0.25f;
+
+        marker.points.reserve(sample.poses.size());
+        for (const auto& pose : sample.poses) {
+            geometry_msgs::msg::Point point;
+            point.x = pose.x;
+            point.y = pose.y;
+            marker.points.push_back(point);
+        }
+
+        marker_array.markers.push_back(marker);
+    }
+
+    if (best != nullptr && !best->poses.empty()) {
+        visualization_msgs::msg::Marker marker;
+        marker.header.stamp = stamp;
+        marker.header.frame_id = frame_id.empty() ? "map" : frame_id;
+        marker.ns = "dwa_best";
+        marker.id = marker_id++;
+        marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        marker.action = visualization_msgs::msg::Marker::ADD;
+        marker.scale.x = 0.03;
+        marker.pose.orientation.w = 1.0;
+        marker.color.r = 0.1f;
+        marker.color.g = 0.6f;
+        marker.color.b = 1.0f;
+        marker.color.a = 0.95f;
+
+        marker.points.reserve(best->poses.size());
+        for (const auto& pose : best->poses) {
+            geometry_msgs::msg::Point point;
+            point.x = pose.x;
+            point.y = pose.y;
+            marker.points.push_back(point);
+        }
+
+        marker_array.markers.push_back(marker);
+    }
+
+    debug_traj_pub_->publish(marker_array);
+    debug_markers_active_ = true;
+}
+
+void LocalPlannerNode::clearDebugTrajectories()
+{
+    if (!debug_traj_pub_) {
+        return;
+    }
+
+    visualization_msgs::msg::MarkerArray marker_array;
+    visualization_msgs::msg::Marker clear_marker;
+    clear_marker.action = visualization_msgs::msg::Marker::DELETEALL;
+    marker_array.markers.push_back(clear_marker);
+    debug_traj_pub_->publish(marker_array);
+    debug_markers_active_ = false;
+}
+
 void LocalPlannerNode::publishRotateToGoal(double yaw_error)
 {
+    const auto options = getOptions();
     TwistMsgT cmd;
     cmd.linear.x = 0.0;
-    cmd.angular.z = std::clamp(yaw_error * 1.5, options_.min_vel_theta, options_.max_vel_theta);
+    cmd.angular.z = std::clamp(yaw_error * 1.5, options.min_vel_theta, options.max_vel_theta);
     cmd_vel_pub_->publish(cmd);
     zero_cmd_published_ = false;
+}
+
+LocalPlannerNode::Options LocalPlannerNode::getOptions() const
+{
+    std::lock_guard<std::mutex> lock(options_mutex_);
+    return options_;
+}
+
+rcl_interfaces::msg::SetParametersResult LocalPlannerNode::handleParameterUpdate(
+    const std::vector<rclcpp::Parameter>& parameters)
+{
+    auto updated = getOptions();
+
+    for (const auto& parameter : parameters) {
+        const auto& name = parameter.get_name();
+
+        if (name == "control_frequency") {
+            updated.control_frequency = parameter.as_double();
+        } else if (name == "sim_time") {
+            updated.sim_time = parameter.as_double();
+        } else if (name == "sim_granularity") {
+            updated.sim_granularity = parameter.as_double();
+        } else if (name == "vx_samples") {
+            updated.vx_samples = parameter.as_int();
+        } else if (name == "vtheta_samples") {
+            updated.vtheta_samples = parameter.as_int();
+        } else if (name == "max_vel_x") {
+            updated.max_vel_x = parameter.as_double();
+        } else if (name == "min_vel_x") {
+            updated.min_vel_x = parameter.as_double();
+        } else if (name == "max_vel_theta") {
+            updated.max_vel_theta = parameter.as_double();
+        } else if (name == "min_vel_theta") {
+            updated.min_vel_theta = parameter.as_double();
+        } else if (name == "acc_lim_x") {
+            updated.acc_lim_x = parameter.as_double();
+        } else if (name == "acc_lim_theta") {
+            updated.acc_lim_theta = parameter.as_double();
+        } else if (name == "path_distance_bias") {
+            updated.path_distance_bias = parameter.as_double();
+        } else if (name == "goal_distance_bias") {
+            updated.goal_distance_bias = parameter.as_double();
+        } else if (name == "obstacle_cost_bias") {
+            updated.obstacle_cost_bias = parameter.as_double();
+        } else if (name == "progress_bias") {
+            updated.progress_bias = parameter.as_double();
+        } else if (name == "speed_bias") {
+            updated.speed_bias = parameter.as_double();
+        } else if (name == "heading_bias") {
+            updated.heading_bias = parameter.as_double();
+        } else if (name == "local_goal_distance") {
+            updated.local_goal_distance = parameter.as_double();
+        } else if (name == "goal_tolerance_xy") {
+            updated.goal_tolerance_xy = parameter.as_double();
+        } else if (name == "goal_tolerance_yaw") {
+            updated.goal_tolerance_yaw = parameter.as_double();
+        } else if (name == "max_no_control_cycles") {
+            updated.max_no_control_cycles = parameter.as_int();
+        } else if (name == "publish_debug_trajectories") {
+            updated.publish_debug_trajectories = parameter.as_bool();
+        }
+    }
+
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = false;
+
+    if (updated.control_frequency <= 0.0) {
+        result.reason = "control_frequency must be > 0";
+        return result;
+    }
+    if (updated.sim_time <= 0.0) {
+        result.reason = "sim_time must be > 0";
+        return result;
+    }
+    if (updated.sim_granularity <= 0.0) {
+        result.reason = "sim_granularity must be > 0";
+        return result;
+    }
+    if (updated.vx_samples < 1) {
+        result.reason = "vx_samples must be >= 1";
+        return result;
+    }
+    if (updated.vtheta_samples < 1) {
+        result.reason = "vtheta_samples must be >= 1";
+        return result;
+    }
+    if (updated.max_vel_x < updated.min_vel_x) {
+        result.reason = "max_vel_x must be >= min_vel_x";
+        return result;
+    }
+    if (updated.max_vel_theta < updated.min_vel_theta) {
+        result.reason = "max_vel_theta must be >= min_vel_theta";
+        return result;
+    }
+    if (updated.acc_lim_x < 0.0) {
+        result.reason = "acc_lim_x must be >= 0";
+        return result;
+    }
+    if (updated.acc_lim_theta < 0.0) {
+        result.reason = "acc_lim_theta must be >= 0";
+        return result;
+    }
+    if (updated.path_distance_bias < 0.0 || updated.goal_distance_bias < 0.0 ||
+        updated.obstacle_cost_bias < 0.0 || updated.speed_bias < 0.0 ||
+        updated.heading_bias < 0.0 || updated.progress_bias < 0.0) {
+        result.reason = "cost biases must be >= 0";
+        return result;
+    }
+    if (updated.local_goal_distance < 0.0) {
+        result.reason = "local_goal_distance must be >= 0";
+        return result;
+    }
+    if (updated.goal_tolerance_xy < 0.0 || updated.goal_tolerance_yaw < 0.0) {
+        result.reason = "goal tolerances must be >= 0";
+        return result;
+    }
+    if (updated.max_no_control_cycles < 1) {
+        result.reason = "max_no_control_cycles must be >= 1";
+        return result;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(options_mutex_);
+        options_ = updated;
+    }
+
+    result.successful = true;
+    return result;
 }
 
 bool LocalPlannerNode::getRobotPose(Pose2D& pose)
@@ -302,6 +539,7 @@ std::vector<geometry_msgs::msg::PoseStamped> LocalPlannerNode::prunePlan(
 geometry_msgs::msg::PoseStamped LocalPlannerNode::selectLocalGoal(
     const std::vector<geometry_msgs::msg::PoseStamped>& plan_segment) const
 {
+    const auto options = getOptions();
     if (plan_segment.empty()) {
         return geometry_msgs::msg::PoseStamped();
     }
@@ -311,7 +549,7 @@ geometry_msgs::msg::PoseStamped LocalPlannerNode::selectLocalGoal(
         const auto& prev = plan_segment[i - 1].pose.position;
         const auto& cur = plan_segment[i].pose.position;
         accumulated_distance += std::hypot(cur.x - prev.x, cur.y - prev.y);
-        if (accumulated_distance >= options_.local_goal_distance) {
+        if (accumulated_distance >= options.local_goal_distance) {
             return plan_segment[i];
         }
     }
@@ -324,21 +562,23 @@ LocalPlannerNode::TrajectorySample LocalPlannerNode::findBestTrajectory(
     const OdomMsgT& odom,
     const CostmapMsgT& costmap,
     const std::vector<geometry_msgs::msg::PoseStamped>& plan_segment,
-    const geometry_msgs::msg::PoseStamped& local_goal) const
+    const geometry_msgs::msg::PoseStamped& local_goal,
+    std::vector<TrajectorySample>* debug_samples) const
 {
+    const auto options = getOptions();
     TrajectorySample best;
 
-    const double control_dt = 1.0 / std::max(1.0, options_.control_frequency);
+    const double control_dt = 1.0 / std::max(1.0, options.control_frequency);
     const double current_linear = odom.twist.twist.linear.x;
     const double current_angular = odom.twist.twist.angular.z;
 
-    const double window_min_v = std::max(options_.min_vel_x, current_linear - options_.acc_lim_x * control_dt);
-    const double window_max_v = std::min(options_.max_vel_x, current_linear + options_.acc_lim_x * control_dt);
-    const double window_min_w = std::max(options_.min_vel_theta, current_angular - options_.acc_lim_theta * control_dt);
-    const double window_max_w = std::min(options_.max_vel_theta, current_angular + options_.acc_lim_theta * control_dt);
+    const double window_min_v = std::max(options.min_vel_x, current_linear - options.acc_lim_x * control_dt);
+    const double window_max_v = std::min(options.max_vel_x, current_linear + options.acc_lim_x * control_dt);
+    const double window_min_w = std::max(options.min_vel_theta, current_angular - options.acc_lim_theta * control_dt);
+    const double window_max_w = std::min(options.max_vel_theta, current_angular + options.acc_lim_theta * control_dt);
 
-    const int vx_samples = std::max(1, options_.vx_samples);
-    const int vtheta_samples = std::max(1, options_.vtheta_samples);
+    const int vx_samples = std::max(1, options.vx_samples);
+    const int vtheta_samples = std::max(1, options.vtheta_samples);
 
     // For each sampled linear and angular velocity, simulate the trajectory and evaluate its cost
     for (int i = 0; i < vx_samples; ++i) {
@@ -352,16 +592,22 @@ LocalPlannerNode::TrajectorySample LocalPlannerNode::findBestTrajectory(
                 : window_min_w + (window_max_w - window_min_w) * static_cast<double>(j) / static_cast<double>(vtheta_samples - 1);
 
             auto sample = simulateTrajectory(robot_pose, linear_vel, angular_vel, costmap, plan_segment, local_goal);
+            if (debug_samples != nullptr) {
+                debug_samples->push_back(sample);
+            }
             if (sample.collision || sample.total_cost >= best.total_cost) {
                 continue;
             }
-            best = std::move(sample);
+            best = sample;
         }
     }
 
     auto stop_sample = simulateTrajectory(robot_pose, 0.0, 0.0, costmap, plan_segment, local_goal);
+    if (debug_samples != nullptr) {
+        debug_samples->push_back(stop_sample);
+    }
     if (!stop_sample.collision && stop_sample.total_cost < best.total_cost) {
-        best = std::move(stop_sample);
+        best = stop_sample;
     }
 
     return best;
@@ -375,16 +621,19 @@ LocalPlannerNode::TrajectorySample LocalPlannerNode::simulateTrajectory(
     const std::vector<geometry_msgs::msg::PoseStamped>& plan_segment,
     const geometry_msgs::msg::PoseStamped& local_goal) const
 {
+    const auto options = getOptions();
     TrajectorySample sample;
     sample.linear_vel = linear_vel;
     sample.angular_vel = angular_vel;
     sample.collision = false;
 
     Pose2D pose = start_pose;
-    const double dt = std::max(0.02, options_.sim_granularity);
+    const double dt = std::max(0.02, options.sim_granularity);
     double max_obstacle_cost = 0.0;
+    double obstacle_cost_sum = 0.0;
+    std::size_t obstacle_cost_samples = 0;
 
-    for (double t = 0.0; t < options_.sim_time; t += dt) {
+    for (double t = 0.0; t < options.sim_time; t += dt) {
         pose.x += linear_vel * std::cos(pose.yaw) * dt;
         pose.y += linear_vel * std::sin(pose.yaw) * dt;
         pose.yaw = normalizeAngle(pose.yaw + angular_vel * dt);
@@ -397,6 +646,8 @@ LocalPlannerNode::TrajectorySample LocalPlannerNode::simulateTrajectory(
             return sample;
         }
         max_obstacle_cost = std::max(max_obstacle_cost, obstacle_cost);
+        obstacle_cost_sum += obstacle_cost;
+        ++obstacle_cost_samples;
     }
 
     if (sample.poses.empty()) {
@@ -415,15 +666,22 @@ LocalPlannerNode::TrajectorySample LocalPlannerNode::simulateTrajectory(
         local_goal.pose.position.x - end_pose.x,
         local_goal.pose.position.y - end_pose.y);
     sample.heading_cost = std::abs(normalizeAngle(local_goal_yaw - end_pose.yaw));
-    sample.obstacle_cost = max_obstacle_cost / static_cast<double>(rf_costmap::LETHAL_OBSTACLE);
-    sample.speed_cost = options_.max_vel_x - linear_vel;
+    sample.obstacle_peak_cost = max_obstacle_cost / static_cast<double>(rf_costmap::LETHAL_OBSTACLE);
+    sample.obstacle_mean_cost = obstacle_cost_samples == 0
+        ? 0.0
+        : (obstacle_cost_sum / static_cast<double>(obstacle_cost_samples)) /
+            static_cast<double>(rf_costmap::LETHAL_OBSTACLE);
+    sample.obstacle_cost = sample.obstacle_mean_cost;
+    sample.speed_cost = options.max_vel_x - linear_vel;
+    sample.progress_reward = computePathProgress(end_pose, plan_segment);
 
     sample.total_cost =
-        options_.path_distance_bias * sample.path_cost +
-        options_.goal_distance_bias * sample.goal_cost +
-        options_.heading_bias * sample.heading_cost +
-        options_.obstacle_cost_bias * sample.obstacle_cost +
-        options_.speed_bias * sample.speed_cost;
+        options.path_distance_bias * sample.path_cost +
+        options.goal_distance_bias * sample.goal_cost +
+        options.heading_bias * sample.heading_cost +
+        options.obstacle_cost_bias * sample.obstacle_cost +
+        options.speed_bias * sample.speed_cost -
+        options.progress_bias * sample.progress_reward;
 
     return sample;
 }
@@ -440,6 +698,35 @@ double LocalPlannerNode::computePathDistance(
         best_distance = std::min(best_distance, distance);
     }
     return std::isfinite(best_distance) ? best_distance : 0.0;
+}
+
+double LocalPlannerNode::computePathProgress(
+    const Pose2D& pose,
+    const std::vector<geometry_msgs::msg::PoseStamped>& plan_segment) const
+{
+    if (plan_segment.size() < 2) {
+        return 0.0;
+    }
+
+    std::size_t nearest_index = 0;
+    double nearest_distance = std::numeric_limits<double>::infinity();
+    for (std::size_t i = 0; i < plan_segment.size(); ++i) {
+        const auto& path_pose = plan_segment[i].pose.position;
+        const double distance = std::hypot(path_pose.x - pose.x, path_pose.y - pose.y);
+        if (distance < nearest_distance) {
+            nearest_distance = distance;
+            nearest_index = i;
+        }
+    }
+
+    double progress = 0.0;
+    for (std::size_t i = 1; i <= nearest_index; ++i) {
+        const auto& prev = plan_segment[i - 1].pose.position;
+        const auto& cur = plan_segment[i].pose.position;
+        progress += std::hypot(cur.x - prev.x, cur.y - prev.y);
+    }
+
+    return progress;
 }
 
 bool LocalPlannerNode::isCollision(const Pose2D& pose, const CostmapMsgT& costmap, double* max_cost) const

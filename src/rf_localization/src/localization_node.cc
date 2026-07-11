@@ -31,6 +31,14 @@ LocalizationNode::LocalizationNode()
     options_.initial_pose_x = this->declare_parameter<double>("initial_pose.x", 0.0);
     options_.initial_pose_y = this->declare_parameter<double>("initial_pose.y", 0.0);
     options_.initial_pose_yaw = this->declare_parameter<double>("initial_pose.yaw", 0.0);
+    options_.max_map_to_odom_translation_jump = this->declare_parameter<double>(
+        "max_map_to_odom_translation_jump", options_.max_map_to_odom_translation_jump);
+    options_.max_map_to_odom_yaw_jump = this->declare_parameter<double>(
+        "max_map_to_odom_yaw_jump", options_.max_map_to_odom_yaw_jump);
+    options_.map_to_odom_smoothing_alpha = this->declare_parameter<double>(
+        "map_to_odom_smoothing_alpha", options_.map_to_odom_smoothing_alpha);
+    options_.reject_large_map_to_odom_jump = this->declare_parameter<bool>(
+        "reject_large_map_to_odom_jump", options_.reject_large_map_to_odom_jump);
     options_.publish_aligned_scan = this->declare_parameter<bool>("publish_aligned_scan", true);
     options_.autostart = this->declare_parameter<bool>("autostart", true);
 
@@ -208,12 +216,39 @@ void LocalizationNode::processScan(const sensor_msgs::msg::LaserScan::ConstShare
     }
 
     const Eigen::Matrix4f localized_map_to_base = normalizePlanarTransform(result->pose_in_map);
+    const Eigen::Matrix4f candidate_map_to_odom =
+        normalizePlanarTransform(localized_map_to_base * odom_to_base.inverse());
+    Eigen::Matrix4f stabilized_map_to_odom = candidate_map_to_odom;
+    Eigen::Matrix4f stabilized_map_to_base = localized_map_to_base;
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        map_to_odom_ = normalizePlanarTransform(localized_map_to_base * odom_to_base.inverse());
+        const double dx = static_cast<double>(candidate_map_to_odom(0, 3) - map_to_odom_(0, 3));
+        const double dy = static_cast<double>(candidate_map_to_odom(1, 3) - map_to_odom_(1, 3));
+        const double translation_jump = std::hypot(dx, dy);
+        const double yaw_jump = std::abs(normalizeAngle(
+            planarTransformYaw(candidate_map_to_odom) - planarTransformYaw(map_to_odom_)));
+
+        if (options_.reject_large_map_to_odom_jump &&
+            (translation_jump > options_.max_map_to_odom_translation_jump ||
+             yaw_jump > options_.max_map_to_odom_yaw_jump)) {
+            LOCALIZATION_WARN(
+                "Rejected map->odom correction jump: translation={:.3f} m yaw={:.3f} rad fitness={:.4f}",
+                translation_jump,
+                yaw_jump,
+                result->fitness_score);
+            stabilized_map_to_odom = map_to_odom_;
+        } else {
+            stabilized_map_to_odom = blendPlanarTransform(
+                map_to_odom_,
+                candidate_map_to_odom,
+                options_.map_to_odom_smoothing_alpha);
+            map_to_odom_ = stabilized_map_to_odom;
+        }
+
+        stabilized_map_to_base = normalizePlanarTransform(stabilized_map_to_odom * odom_to_base);
     }
 
-    publishLocalizedPose(localized_map_to_base, msg->header.stamp);
+    publishLocalizedPose(stabilized_map_to_base, msg->header.stamp);
     publishMapToOdomTransform(msg->header.stamp);
 
     if (options_.publish_aligned_scan) {
@@ -398,8 +433,33 @@ Eigen::Matrix4f LocalizationNode::makePlanarTransform(double x, double y, double
 
 Eigen::Matrix4f LocalizationNode::normalizePlanarTransform(const Eigen::Matrix4f& transform) const
 {
-    const float yaw = std::atan2(transform(1, 0), transform(0, 0));
+    const float yaw = static_cast<float>(planarTransformYaw(transform));
     return makePlanarTransform(transform(0, 3), transform(1, 3), yaw);
+}
+
+Eigen::Matrix4f LocalizationNode::blendPlanarTransform(
+    const Eigen::Matrix4f& current,
+    const Eigen::Matrix4f& target,
+    double alpha) const
+{
+    const double clamped_alpha = std::clamp(alpha, 0.0, 1.0);
+    const double blended_x = (1.0 - clamped_alpha) * static_cast<double>(current(0, 3)) +
+        clamped_alpha * static_cast<double>(target(0, 3));
+    const double blended_y = (1.0 - clamped_alpha) * static_cast<double>(current(1, 3)) +
+        clamped_alpha * static_cast<double>(target(1, 3));
+    const double yaw_delta = normalizeAngle(planarTransformYaw(target) - planarTransformYaw(current));
+    const double blended_yaw = planarTransformYaw(current) + clamped_alpha * yaw_delta;
+    return makePlanarTransform(blended_x, blended_y, blended_yaw);
+}
+
+double LocalizationNode::planarTransformYaw(const Eigen::Matrix4f& transform) const
+{
+    return std::atan2(static_cast<double>(transform(1, 0)), static_cast<double>(transform(0, 0)));
+}
+
+double LocalizationNode::normalizeAngle(double angle) const
+{
+    return std::atan2(std::sin(angle), std::cos(angle));
 }
 
 geometry_msgs::msg::Pose LocalizationNode::matrixToPose(const Eigen::Matrix4f& transform) const
@@ -410,7 +470,7 @@ geometry_msgs::msg::Pose LocalizationNode::matrixToPose(const Eigen::Matrix4f& t
     pose.position.z = 0.0;
 
     tf2::Quaternion quaternion;
-    quaternion.setRPY(0.0, 0.0, std::atan2(transform(1, 0), transform(0, 0)));
+    quaternion.setRPY(0.0, 0.0, planarTransformYaw(transform));
     pose.orientation = tf2::toMsg(quaternion);
     return pose;
 }
@@ -423,7 +483,7 @@ geometry_msgs::msg::Transform LocalizationNode::matrixToTransform(const Eigen::M
     tf_msg.translation.z = 0.0;
 
     tf2::Quaternion quaternion;
-    quaternion.setRPY(0.0, 0.0, std::atan2(transform(1, 0), transform(0, 0)));
+    quaternion.setRPY(0.0, 0.0, planarTransformYaw(transform));
     tf_msg.rotation = tf2::toMsg(quaternion);
     return tf_msg;
 }
