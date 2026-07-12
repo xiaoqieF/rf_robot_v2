@@ -72,15 +72,15 @@ constexpr std::chrono::milliseconds kFrontierRetrySleep{1000};
 constexpr std::chrono::seconds kInitialMappingTimeout{20};
 constexpr std::chrono::seconds kNoFrontierStableDuration{8};
 constexpr uint32_t kDefaultMaxFrontierFailures = 10;
-constexpr uint32_t kDefaultMinFrontierClusterSize = 8;
+constexpr uint32_t kDefaultMinFrontierClusterSize = 4;
 constexpr double kReachedGoalSuppressRadius = 0.2;
 constexpr double kFailedGoalSuppressRadius = 0.35;
 constexpr std::size_t kMinimumSeedFreeCells = 50;
 constexpr int8_t kGoalOccupiedThreshold = 80;
-constexpr double kGoalMinStandoffMeters = 0.20;
-constexpr double kGoalPreferredStandoffMeters = 0.40;
-constexpr double kGoalSearchRadiusMeters = 1.20;
-constexpr double kGoalClearanceRadiusMeters = 0.20;
+constexpr double kGoalMinStandoffMeters = 0.10;
+constexpr double kGoalPreferredStandoffMeters = 0.20;
+constexpr double kGoalSearchRadiusMeters = 0.50;
+constexpr double kGoalClearanceRadiusMeters = 0.25;
 constexpr double kGoalKnownRadiusMeters = 0.10;
 
 enum class FutureWaitStatus
