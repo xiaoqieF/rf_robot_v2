@@ -107,8 +107,6 @@ void MappingJob::run()
             navigation_failures,
             &navigation_reason)) {
             case FrontierNavigationResult::REACHED_FRONTIER:
-                publishFeedback("settling", 0);
-                rclcpp::sleep_for(kFrontierSettleSleep);
                 continue;
             case FrontierNavigationResult::CANCELED:
                 finish(false, ActionExploreMap::Result::CANCELED, "exploration canceled", false);

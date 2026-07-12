@@ -38,6 +38,8 @@ LocalPlannerNode::LocalPlannerNode()
     options_.local_goal_distance = this->declare_parameter<double>("local_goal_distance", options_.local_goal_distance);
     options_.goal_tolerance_xy = this->declare_parameter<double>("goal_tolerance_xy", options_.goal_tolerance_xy);
     options_.goal_tolerance_yaw = this->declare_parameter<double>("goal_tolerance_yaw", options_.goal_tolerance_yaw);
+    options_.enforce_goal_heading = this->declare_parameter<bool>(
+        "enforce_goal_heading", options_.enforce_goal_heading);
     options_.max_no_control_cycles = this->declare_parameter<int>("max_no_control_cycles", options_.max_no_control_cycles);
     options_.no_progress_timeout = this->declare_parameter<double>("no_progress_timeout", options_.no_progress_timeout);
     options_.min_progress_distance = this->declare_parameter<double>("min_progress_distance", options_.min_progress_distance);
@@ -202,7 +204,8 @@ void LocalPlannerNode::handleFollowPath()
 
         // 2. Check if the robot is within the goal tolerance, if so, stop and succeed
         if (goal_distance <= options.goal_tolerance_xy) {
-            if (std::abs(goal_yaw_error) <= options.goal_tolerance_yaw) {
+            if (!options.enforce_goal_heading ||
+                std::abs(goal_yaw_error) <= options.goal_tolerance_yaw) {
                 publishZeroVelocity();
                 result->tracking_time = this->now() - start_time;
                 result->error_code = ActionFollowPath::Result::NONE;
@@ -446,6 +449,8 @@ rcl_interfaces::msg::SetParametersResult LocalPlannerNode::handleParameterUpdate
             updated.goal_tolerance_xy = parameter.as_double();
         } else if (name == "goal_tolerance_yaw") {
             updated.goal_tolerance_yaw = parameter.as_double();
+        } else if (name == "enforce_goal_heading") {
+            updated.enforce_goal_heading = parameter.as_bool();
         } else if (name == "max_no_control_cycles") {
             updated.max_no_control_cycles = parameter.as_int();
         } else if (name == "no_progress_timeout") {

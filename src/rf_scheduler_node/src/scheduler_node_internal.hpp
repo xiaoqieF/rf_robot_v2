@@ -69,7 +69,6 @@ constexpr std::chrono::milliseconds kDefaultResponseWait{5000};
 constexpr std::chrono::milliseconds kMapWarmupWait{4000};
 constexpr std::chrono::milliseconds kFinalMapWait{2000};
 constexpr std::chrono::milliseconds kFrontierRetrySleep{1000};
-constexpr std::chrono::milliseconds kFrontierSettleSleep{1500};
 constexpr std::chrono::seconds kInitialMappingTimeout{20};
 constexpr std::chrono::seconds kNoFrontierStableDuration{8};
 constexpr uint32_t kDefaultMaxFrontierFailures = 10;

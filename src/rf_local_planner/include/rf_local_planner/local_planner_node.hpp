@@ -59,6 +59,7 @@ private:
         double local_goal_distance = 0.3;       // Choose a point on the global path that is this distance away from the robot as the local goal
         double goal_tolerance_xy = 0.15;
         double goal_tolerance_yaw = 0.10;
+        bool enforce_goal_heading = false;
         int max_no_control_cycles = 20;
         double no_progress_timeout = 6.0;
         double min_progress_distance = 0.10;
