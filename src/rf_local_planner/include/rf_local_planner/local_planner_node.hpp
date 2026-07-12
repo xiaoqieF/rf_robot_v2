@@ -44,10 +44,10 @@ private:
         double sim_granularity = 0.05;           // Time step for simulating trajectories, in seconds
         int vx_samples = 8;
         int vtheta_samples = 12;
-        double max_vel_x = 0.5;
+        double max_vel_x = 0.3;
         double min_vel_x = 0.0;
-        double max_vel_theta = 3.0;
-        double min_vel_theta = -3.0;
+        double max_vel_theta = 2.0;
+        double min_vel_theta = -2.0;
         double acc_lim_x = 2.0;
         double acc_lim_theta = 10.0;
         double path_distance_bias = 0.5;
