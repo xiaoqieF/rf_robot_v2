@@ -283,7 +283,7 @@ void LocalizationNode::publishMapToOdomTransform(const rclcpp::Time& stamp)
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (!map_to_odom_initialized_) {
+        if (!active_ || !map_to_odom_initialized_) {
             return;
         }
         transform_stamped.transform = matrixToTransform(map_to_odom_);

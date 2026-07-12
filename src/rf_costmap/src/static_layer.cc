@@ -42,14 +42,24 @@ void StaticLayer::matchSize()
 
 uint8_t StaticLayer::interpretCostValue(uint8_t cost) const
 {
-    // Use trinary logic to interpret the cost value
     if (cost == UNKNOWN_COST_VALUE) {
         return NO_INFORMATION;
-    } else if (cost >= LETHAL_THRESHOLD) {
+    }
+
+    // /map may come from two paths:
+    // 1) live /slam_map pass-through, which carries occupancy values in 0..100
+    // 2) map_manager disk reload, which is already trinary (-1 / 0 / 100)
+    // Using the same thresholds as map_manager's dump logic preserves probable
+    // walls from the live SLAM map while remaining compatible with disk maps.
+    if (cost >= OCCUPIED_THRESHOLD) {
         return LETHAL_OBSTACLE;
-    } else {
+    }
+
+    if (cost <= FREE_THRESHOLD) {
         return FREE_SPACE;
     }
+
+    return NO_INFORMATION;
 }
 
 void StaticLayer::processMap(const nav_msgs::msg::OccupancyGrid::SharedPtr& msg)

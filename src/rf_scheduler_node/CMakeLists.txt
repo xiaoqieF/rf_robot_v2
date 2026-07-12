@@ -12,6 +12,9 @@ find_package(rclcpp_action REQUIRED)
 find_package(rf_robot_msgs REQUIRED)
 find_package(elog REQUIRED)
 find_package(rf_util REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -40,6 +43,9 @@ ament_target_dependencies(${PROJECT_NAME}
   rf_robot_msgs
   rf_util
   elog
+  geometry_msgs
+  nav_msgs
+  tf2_ros
 )
 
 ament_export_include_directories(include)
@@ -50,6 +56,9 @@ ament_export_dependencies(
   rf_robot_msgs
   rf_util
   elog
+  geometry_msgs
+  nav_msgs
+  tf2_ros
 )
 
 install(

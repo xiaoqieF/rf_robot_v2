@@ -205,17 +205,64 @@ void MapBuilderNode::init()
         "/build_map",
         [this](const std::shared_ptr<ReqAckSrvT::Request> request,
                std::shared_ptr<ReqAckSrvT::Response> response) {
-            (void)request;
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (addTrajectory(trajectory_options_) != -1) {
-                response->ack = true;
-                MAP_BUILDER_INFO("Started trajectory with ID: {}", current_trajectory_id_.load());
+            std::string reason;
+            const bool should_start =
+                request != nullptr && request->trigger == ReqAckSrvT::Request::START;
+            const bool success = should_start ? startBuild(&reason) : stopBuild(&reason);
+            if (success) {
+                response->ack = ReqAckSrvT::Response::OK;
             } else {
-                response->ack = false;
-                MAP_BUILDER_WARN("Failed to start a new trajectory.");
+                response->ack = ReqAckSrvT::Response::FAILED;
+                response->reason = reason;
             }
         });
 
+}
+
+bool MapBuilderNode::startBuild(std::string* reason)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (current_trajectory_id_ != -1) {
+        if (reason) {
+            *reason = "A mapping trajectory is already active.";
+        }
+        return false;
+    }
+
+    pose_extrapolator_ = std::make_unique<cartographer::mapping::PoseExtrapolator>(
+        cartographer::common::FromSeconds(kExtrapolationEstimationTimeSec),
+        kGravityTimeConstant);
+
+    if (addTrajectory(trajectory_options_) == -1) {
+        if (reason) {
+            *reason = "Failed to start a new trajectory.";
+        }
+        MAP_BUILDER_WARN("Failed to start a new trajectory.");
+        return false;
+    }
+
+    MAP_BUILDER_INFO("Started trajectory with ID: {}", current_trajectory_id_.load());
+    return true;
+}
+
+bool MapBuilderNode::stopBuild(std::string* reason)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (current_trajectory_id_ == -1) {
+        if (reason) {
+            *reason = "No active mapping trajectory to stop.";
+        }
+        return false;
+    }
+
+    const int trajectory_id = current_trajectory_id_.load();
+    map_builder_bridge_->FinishTrajectory(trajectory_id);
+    map_builder_bridge_->runFinalOptimization();
+    publishOccupancyGridLocked(this->now());
+    current_trajectory_id_ = -1;
+
+    MAP_BUILDER_INFO("Stopped trajectory with ID: {} and published final map.", trajectory_id);
+    return true;
 }
 
 std::set<cartographer::mapping::TrajectoryBuilderInterface::SensorId>
@@ -338,6 +385,11 @@ void MapBuilderNode::publishOccupancyGrid()
     }
 
     std::lock_guard<std::mutex> lock(mutex_);
+    publishOccupancyGridLocked(this->now());
+}
+
+void MapBuilderNode::publishOccupancyGridLocked(const rclcpp::Time& stamp)
+{
     auto submap_slices = map_builder_bridge_->getSubmapSlices();
     if (submap_slices.empty()) {
         return;
@@ -352,7 +404,7 @@ void MapBuilderNode::publishOccupancyGrid()
     occupancy_grid_publisher_->publish(createOccupancyGridMsg(
         cartographer::io::PaintSubmapSlices(submap_slices, resolution),
         resolution,
-        this->now(),
+        stamp,
         node_options_.map_frame));
 }
 

@@ -68,8 +68,15 @@ void MapManager::handleMapUpdate(const OccupancyGridMsgT::SharedPtr msg)
         return;
     }
 
-    std::lock_guard<std::mutex> lock(map_mutex_);
-    cached_map_ = std::make_shared<OccupancyGridMsgT>(*msg);
+    auto cached_map = std::make_shared<OccupancyGridMsgT>(*msg);
+    {
+        std::lock_guard<std::mutex> lock(map_mutex_);
+        cached_map_ = cached_map;
+    }
+
+    // Keep /map aligned with the live SLAM map so downstream planning can
+    // explore against the latest occupancy grid.
+    map_publisher_->publish(*cached_map);
 }
 
 bool MapManager::saveCachedMap(std::string* reason)

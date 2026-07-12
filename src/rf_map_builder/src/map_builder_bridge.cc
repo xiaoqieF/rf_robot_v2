@@ -68,7 +68,7 @@ void MapBuilderBridge::runFinalOptimization()
 
 std::map<int, mapping::PoseGraphInterface::TrajectoryState> MapBuilderBridge::getTrajectoryStates()
 {
-    auto traj_states = map_builder_->pose_graph()->GetTrajectoryStates(); // Add active trajectories that are not yet in the pose graph, but are e.g.  // waiting for input sensor data and thus already have a sensor bridge.  // Add active trajectories that are not yet in the pose graph, but are e.g.  // waiting for input sensor data and thus already have a sensor bridge.  // Add active trajKctories that are not yet in the pose graph, but are e.g.  traj_states.emplace(sensor_bridge.first, mapping::PoseGraphInterface::TrajectoryState::ACTIVE); } return traj_states; } std::unordered_map<int, LocalTrajectoryData> getLocalTrajectoryData(); rf_robot_msgs::msg::SubmapList getSubmapList(rclcpp::Time node_time); SensorBridge* sensorBridge(int trajectory_id);
+    auto traj_states = map_builder_->pose_graph()->GetTrajectoryStates();
 
     // Add active trajectories that are not yet in the pose graph, but are e.g.
     // waiting for input sensor data and thus already have a sensor bridge.

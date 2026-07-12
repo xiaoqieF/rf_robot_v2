@@ -34,9 +34,12 @@ public:
     void init();
 
 private:
+    bool startBuild(std::string* reason = nullptr);
+    bool stopBuild(std::string* reason = nullptr);
     int addTrajectory(const TrajectoryOptions& trajectory_options);
     void publishSubmapList();
     void publishOccupancyGrid();
+    void publishOccupancyGridLocked(const rclcpp::Time& stamp);
     void publishLocalTrajectoryData();
     void handleLaserScanMessage(const std::string& sensor_id,
         const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg);

@@ -30,7 +30,8 @@ private:
 
 private:
     static constexpr uint8_t UNKNOWN_COST_VALUE = 255;
-    static constexpr uint8_t LETHAL_THRESHOLD = 100;
+    static constexpr uint8_t OCCUPIED_THRESHOLD = 65;
+    static constexpr uint8_t FREE_THRESHOLD = 19;
 
     std::atomic_bool map_received_{false};
     std::mutex map_mutex_;

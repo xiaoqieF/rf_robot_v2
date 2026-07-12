@@ -39,6 +39,8 @@ LocalPlannerNode::LocalPlannerNode()
     options_.goal_tolerance_xy = this->declare_parameter<double>("goal_tolerance_xy", options_.goal_tolerance_xy);
     options_.goal_tolerance_yaw = this->declare_parameter<double>("goal_tolerance_yaw", options_.goal_tolerance_yaw);
     options_.max_no_control_cycles = this->declare_parameter<int>("max_no_control_cycles", options_.max_no_control_cycles);
+    options_.no_progress_timeout = this->declare_parameter<double>("no_progress_timeout", options_.no_progress_timeout);
+    options_.min_progress_distance = this->declare_parameter<double>("min_progress_distance", options_.min_progress_distance);
     options_.publish_debug_trajectories = this->declare_parameter<bool>(
         "publish_debug_trajectories", options_.publish_debug_trajectories);
     parameter_callback_handle_ = this->add_on_set_parameters_callback(
@@ -102,6 +104,8 @@ void LocalPlannerNode::handleFollowPath()
     PathMsgT plan = goal->path;
     auto start_time = this->now();
     int no_control_cycles = 0;
+    double best_goal_distance = std::numeric_limits<double>::infinity();
+    auto last_progress_time = start_time;
 
     // Main control loop
     while (rclcpp::ok()) {
@@ -132,6 +136,8 @@ void LocalPlannerNode::handleFollowPath()
             plan = goal->path;
             start_time = this->now();
             no_control_cycles = 0;
+            best_goal_distance = std::numeric_limits<double>::infinity();
+            last_progress_time = start_time;
             L_PLANNER_INFO("Accepted preempted follow path goal with {} poses.", plan.poses.size());
         }
 
@@ -176,6 +182,23 @@ void LocalPlannerNode::handleFollowPath()
         auto feedback = std::make_shared<ActionFollowPath::Feedback>();
         feedback->distance_to_goal = static_cast<float>(goal_distance);
         follow_path_server_->publishFeedback(feedback);
+
+        if ((best_goal_distance - goal_distance) >= options.min_progress_distance) {
+            best_goal_distance = goal_distance;
+            last_progress_time = this->now();
+        } else if (!std::isfinite(best_goal_distance)) {
+            best_goal_distance = goal_distance;
+            last_progress_time = this->now();
+        }
+
+        if ((this->now() - last_progress_time) >= rclcpp::Duration::from_seconds(options.no_progress_timeout)) {
+            result->tracking_time = this->now() - start_time;
+            result->error_code = ActionFollowPath::Result::NO_VALID_CONTROL;
+            result->error_msg = "path tracking stalled without measurable progress";
+            follow_path_server_->terminateCurrent(result);
+            publishZeroVelocity();
+            return;
+        }
 
         // 2. Check if the robot is within the goal tolerance, if so, stop and succeed
         if (goal_distance <= options.goal_tolerance_xy) {
@@ -425,6 +448,10 @@ rcl_interfaces::msg::SetParametersResult LocalPlannerNode::handleParameterUpdate
             updated.goal_tolerance_yaw = parameter.as_double();
         } else if (name == "max_no_control_cycles") {
             updated.max_no_control_cycles = parameter.as_int();
+        } else if (name == "no_progress_timeout") {
+            updated.no_progress_timeout = parameter.as_double();
+        } else if (name == "min_progress_distance") {
+            updated.min_progress_distance = parameter.as_double();
         } else if (name == "publish_debug_trajectories") {
             updated.publish_debug_trajectories = parameter.as_bool();
         }
@@ -485,6 +512,14 @@ rcl_interfaces::msg::SetParametersResult LocalPlannerNode::handleParameterUpdate
     }
     if (updated.max_no_control_cycles < 1) {
         result.reason = "max_no_control_cycles must be >= 1";
+        return result;
+    }
+    if (updated.no_progress_timeout <= 0.0) {
+        result.reason = "no_progress_timeout must be > 0";
+        return result;
+    }
+    if (updated.min_progress_distance < 0.0) {
+        result.reason = "min_progress_distance must be >= 0";
         return result;
     }
 

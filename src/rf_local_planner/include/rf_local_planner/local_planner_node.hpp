@@ -60,6 +60,8 @@ private:
         double goal_tolerance_xy = 0.15;
         double goal_tolerance_yaw = 0.10;
         int max_no_control_cycles = 20;
+        double no_progress_timeout = 6.0;
+        double min_progress_distance = 0.10;
         bool publish_debug_trajectories = true;
     };
 

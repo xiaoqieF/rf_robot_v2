@@ -1,0 +1,18 @@
+---
+uint16 NONE=0
+uint16 CANCELED=1
+uint16 SERVICE_UNAVAILABLE=2
+uint16 BUILD_MAP_FAILED=3
+uint16 NAVIGATION_FAILED=4
+uint16 SAVE_MAP_FAILED=5
+uint16 INTERNAL_ERROR=99
+
+bool success
+builtin_interfaces/Duration elapsed_time
+uint32 explored_frontiers
+uint16 error_code
+string error_msg
+---
+string state
+uint32 frontier_candidates
+uint32 explored_frontiers
