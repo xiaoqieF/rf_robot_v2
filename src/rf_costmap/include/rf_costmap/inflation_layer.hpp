@@ -47,7 +47,7 @@ private:
 
 private:
     const double inflation_radius{0.25};
-    const double inscribed_radius{0.14};
+    const double inscribed_radius{0.16};
     const double cost_scaling_factor{3.0};
 
     double last_min_x_{std::numeric_limits<double>::lowest()};

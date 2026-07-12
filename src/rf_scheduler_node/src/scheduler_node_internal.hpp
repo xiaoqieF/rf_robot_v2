@@ -73,7 +73,7 @@ constexpr std::chrono::seconds kInitialMappingTimeout{20};
 constexpr std::chrono::seconds kNoFrontierStableDuration{8};
 constexpr uint32_t kDefaultMaxFrontierFailures = 10;
 constexpr uint32_t kDefaultMinFrontierClusterSize = 4;
-constexpr double kReachedGoalSuppressRadius = 0.2;
+constexpr double kReachedFrontierSuppressRadius = 0.5;
 constexpr double kFailedGoalSuppressRadius = 0.35;
 constexpr std::size_t kMinimumSeedFreeCells = 50;
 constexpr int8_t kGoalOccupiedThreshold = 80;
@@ -82,6 +82,7 @@ constexpr double kGoalPreferredStandoffMeters = 0.20;
 constexpr double kGoalSearchRadiusMeters = 0.50;
 constexpr double kGoalClearanceRadiusMeters = 0.25;
 constexpr double kGoalKnownRadiusMeters = 0.10;
+constexpr double kFrontierHeadingAlignmentWeight = 1.0;
 
 enum class FutureWaitStatus
 {
@@ -96,6 +97,15 @@ inline geometry_msgs::msg::Quaternion quaternionFromYaw(const double yaw)
     quaternion.z = std::sin(yaw * 0.5);
     quaternion.w = std::cos(yaw * 0.5);
     return quaternion;
+}
+
+inline double yawFromQuaternion(const geometry_msgs::msg::Quaternion& quaternion)
+{
+    const double sin_yaw = 2.0 * (
+        quaternion.w * quaternion.z + quaternion.x * quaternion.y);
+    const double cos_yaw = 1.0 - 2.0 * (
+        quaternion.y * quaternion.y + quaternion.z * quaternion.z);
+    return std::atan2(sin_yaw, cos_yaw);
 }
 
 inline bool isUnknownCell(const int8_t value)

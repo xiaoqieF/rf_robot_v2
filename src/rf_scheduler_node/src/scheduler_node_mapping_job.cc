@@ -365,7 +365,7 @@ MappingJob::FrontierNavigationResult MappingJob::navigateFrontierCandidates(
         if (navigation_status == SchedulerNode::NavigateStatus::SUCCEEDED) {
             ++node_.explored_frontiers_count_;
             navigation_failures = 0;
-            node_.suppressGoalPose(frontier_candidate.goal_pose, kReachedGoalSuppressRadius);
+            node_.suppressFrontier(frontier_candidate, kReachedFrontierSuppressRadius);
             if (failure_reason != nullptr) {
                 failure_reason->clear();
             }

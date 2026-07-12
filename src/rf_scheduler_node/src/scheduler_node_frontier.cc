@@ -294,6 +294,15 @@ std::vector<SchedulerNode::FrontierCandidate> SchedulerNode::computeFrontierCand
 
                         if (robot_pose != nullptr) {
                             score -= robot_distance * 0.35;
+                            if (robot_distance > std::numeric_limits<double>::epsilon()) {
+                                const double candidate_yaw = std::atan2(
+                                    wy - robot_pose->pose.position.y,
+                                    wx - robot_pose->pose.position.x);
+                                const double robot_yaw = detail::yawFromQuaternion(
+                                    robot_pose->pose.orientation);
+                                score += detail::kFrontierHeadingAlignmentWeight *
+                                    std::cos(candidate_yaw - robot_yaw);
+                            }
                         }
 
                         if (score > best_score) {
