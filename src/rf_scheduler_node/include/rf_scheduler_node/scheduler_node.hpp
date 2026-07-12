@@ -25,6 +25,11 @@
 namespace rf_scheduler
 {
 
+namespace detail
+{
+class MappingJob;
+}
+
 using PoseStampedT = geometry_msgs::msg::PoseStamped;
 using OccupancyGridMsgT = nav_msgs::msg::OccupancyGrid;
 using ActionToPose = rf_robot_msgs::action::ComputePathToPose;
@@ -59,15 +64,6 @@ private:
         bool cluster_level = false;
     };
 
-    struct ExplorationContext
-    {
-        std::vector<FrontierCandidate> frontier_candidates;
-        bool map_seeded = false;
-        std::size_t frontier_cluster_count = 0;
-        std::size_t suppressed_cluster_count = 0;
-        std::size_t rejected_cluster_count = 0;
-    };
-
     enum class NavigateStatus
     {
         SUCCEEDED,
@@ -78,29 +74,18 @@ private:
         REJECTED,
     };
 
-    enum class FrontierNavigationResult
-    {
-        REACHED_FRONTIER,
-        RETRY_LATER,
-        CANCELED,
-        FAILURE_LIMIT_REACHED,
-    };
-
+    // Node lifecycle and top-level request handling.
     void loop();
     void handleGoalPoseMsg();
     void handleExploreMap();
+
+    // Navigation pipeline.
     NavigateStatus navigateToPose(
         const PoseStampedT& goal_pose,
         const std::function<bool()>& should_interrupt,
         std::string* failure_reason = nullptr);
-    ExplorationContext collectExplorationContext() const;
-    FrontierNavigationResult navigateFrontierCandidates(
-        const std::vector<FrontierCandidate>& frontier_candidates,
-        uint32_t& navigation_failures,
-        std::string* failure_reason);
-    bool prepareExploration(std::string* reason);
-    void cleanupExploration(bool stop_build_map);
-    bool finishExplorationAndSave(std::string* reason);
+
+    // Shared services and map state helpers.
     bool callReqAckService(
         const rclcpp::Client<ReqAckSrvT>::SharedPtr& client,
         uint8_t trigger,
@@ -109,6 +94,8 @@ private:
         std::chrono::milliseconds wait_for_service = std::chrono::milliseconds(1000),
         std::chrono::milliseconds wait_for_response = std::chrono::milliseconds(5000));
     bool waitForMapUpdate(std::chrono::milliseconds timeout, std::size_t min_update_count = 1);
+
+    // Map and frontier utilities.
     std::shared_ptr<OccupancyGridMsgT> getLatestSlamMap() const;
     bool getRobotPoseInMap(PoseStampedT& pose) const;
     std::vector<FrontierCandidate> computeFrontierCandidates(
@@ -120,17 +107,13 @@ private:
     void suppressFrontier(const FrontierCandidate& frontier_candidate, double radius);
     void suppressGoalPose(const PoseStampedT& goal_pose, double radius);
     bool isFrontierSuppressed(double x, double y, bool cluster_only = false) const;
-    bool shouldInterruptExploration() const;
     void cancelActiveNavigationGoals();
-    void publishExploreFeedback(
-        const std::string& state,
-        std::size_t frontier_candidates,
-        uint32_t explored_frontiers);
-
-private:
     bool hasPendingPreempt() const;
 
 private:
+    friend class detail::MappingJob;
+
+    // Goal inputs and navigation state.
     rclcpp::Subscription<PoseStampedT>::SharedPtr goal_pose_sub_;
     rclcpp::Subscription<OccupancyGridMsgT>::SharedPtr slam_map_sub_;
 
@@ -144,6 +127,7 @@ private:
     rclcpp_action::ClientGoalHandle<ActionToPose>::SharedPtr current_plan_goal_handle_{nullptr};
     rclcpp_action::ClientGoalHandle<ActionFollowPath>::SharedPtr current_follow_goal_handle_{nullptr};
 
+    // Service and action orchestration.
     rf_util::SimpleActionServer<ActionExploreMap>::UniquePtr explore_map_server_;
     rclcpp::Client<ReqAckSrvT>::SharedPtr build_map_client_{nullptr};
     rclcpp::Client<ReqAckSrvT>::SharedPtr save_map_client_{nullptr};
@@ -154,14 +138,17 @@ private:
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
+    // Shared map state.
     mutable std::mutex slam_map_mutex_;
     std::condition_variable slam_map_cv_;
     std::shared_ptr<OccupancyGridMsgT> latest_slam_map_{nullptr};
     std::size_t slam_map_update_count_{0};
 
+    // Frontier suppression state.
     mutable std::mutex suppressed_frontiers_mutex_;
     std::vector<SuppressedFrontier> suppressed_frontiers_;
 
+    // Background execution state.
     std::atomic_bool exploration_active_{false};
     uint32_t explored_frontiers_count_{0};
 

@@ -30,6 +30,10 @@ endif()
 
 add_library(${PROJECT_NAME} SHARED
   src/scheduler_node.cc
+  src/scheduler_node_navigation.cc
+  src/scheduler_node_exploration.cc
+  src/scheduler_node_mapping_job.cc
+  src/scheduler_node_frontier.cc
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
