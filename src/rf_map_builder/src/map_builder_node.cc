@@ -14,6 +14,7 @@
 #include <cmath>
 #include <limits>
 #include <rclcpp/subscription_base.hpp>
+#include <thread>
 #include <tf2/time.hpp>
 
 namespace rf_map_builder
@@ -199,6 +200,14 @@ MapBuilderNode::MapBuilderNode()
     }
 }
 
+MapBuilderNode::~MapBuilderNode()
+{
+    map_to_odom_publisher_running_ = false;
+    if (map_to_odom_publisher_thread_.joinable()) {
+        map_to_odom_publisher_thread_.join();
+    }
+}
+
 void MapBuilderNode::init()
 {
     build_map_srv_ = this->create_service<ReqAckSrvT>(
@@ -217,6 +226,8 @@ void MapBuilderNode::init()
             }
         });
 
+    map_to_odom_publisher_running_ = true;
+    map_to_odom_publisher_thread_ = std::thread(&MapBuilderNode::mapToOdomPublishLoop, this);
 }
 
 bool MapBuilderNode::startBuild(std::string* reason)
@@ -232,6 +243,10 @@ bool MapBuilderNode::startBuild(std::string* reason)
     pose_extrapolator_ = std::make_unique<cartographer::mapping::PoseExtrapolator>(
         cartographer::common::FromSeconds(kExtrapolationEstimationTimeSec),
         kGravityTimeConstant);
+    {
+        std::lock_guard<std::mutex> transform_lock(map_to_odom_mutex_);
+        has_cached_map_to_odom_ = false;
+    }
 
     if (addTrajectory(trajectory_options_) == -1) {
         if (reason) {
@@ -260,6 +275,10 @@ bool MapBuilderNode::stopBuild(std::string* reason)
     map_builder_bridge_->runFinalOptimization();
     publishOccupancyGridLocked(this->now());
     current_trajectory_id_ = -1;
+    {
+        std::lock_guard<std::mutex> transform_lock(map_to_odom_mutex_);
+        has_cached_map_to_odom_ = false;
+    }
 
     MAP_BUILDER_INFO("Stopped trajectory with ID: {} and published final map.", trajectory_id);
     return true;
@@ -474,7 +493,11 @@ void MapBuilderNode::publishLocalTrajectoryData()
 
     if (odom_to_tracking != nullptr) {
         stamped_transform.transform = toGeometryMsgTransform(tracking_to_map * (*odom_to_tracking));
-        tf_broadcaster_->sendTransform(stamped_transform);
+        {
+            std::lock_guard<std::mutex> transform_lock(map_to_odom_mutex_);
+            cached_map_to_odom_ = stamped_transform;
+            has_cached_map_to_odom_ = true;
+        }
     } else {
         MAP_BUILDER_WARN("Cannot publish transform from {} to {} at time {}",
             node_options_.map_frame,
@@ -488,6 +511,30 @@ void MapBuilderNode::publishLocalTrajectoryData()
     pose_msg.header.stamp = stamped_transform.header.stamp;
     pose_msg.pose = toGeometryMsgPose(tracking_to_map);
     tracked_pose_publisher_->publish(pose_msg);
+}
+
+void MapBuilderNode::mapToOdomPublishLoop()
+{
+    constexpr auto kPublishPeriod = std::chrono::milliseconds(50);
+
+    while (rclcpp::ok() && map_to_odom_publisher_running_) {
+        geometry_msgs::msg::TransformStamped transform;
+        bool has_transform = false;
+        {
+            std::lock_guard<std::mutex> transform_lock(map_to_odom_mutex_);
+            if (has_cached_map_to_odom_) {
+                transform = cached_map_to_odom_;
+                has_transform = true;
+            }
+        }
+
+        if (has_transform) {
+            transform.header.stamp = this->now();
+            tf_broadcaster_->sendTransform(transform);
+        }
+
+        std::this_thread::sleep_for(kPublishPeriod);
+    }
 }
 
 } // namespace rf_map_builder

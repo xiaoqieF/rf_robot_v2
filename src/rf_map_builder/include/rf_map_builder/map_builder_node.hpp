@@ -1,6 +1,7 @@
 #pragma once
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rf_map_builder/config_options.hpp"
@@ -18,6 +19,8 @@
 #include <rclcpp/publisher.hpp>
 #include <rclcpp/timer.hpp>
 #include <tf2_ros/transform_listener.h>
+#include <atomic>
+#include <thread>
 #include <unordered_map>
 
 namespace rf_map_builder
@@ -30,6 +33,7 @@ class MapBuilderNode : public rclcpp::Node
 {
 public:
     explicit MapBuilderNode();
+    ~MapBuilderNode() override;
 
     void init();
 
@@ -41,6 +45,7 @@ private:
     void publishOccupancyGrid();
     void publishOccupancyGridLocked(const rclcpp::Time& stamp);
     void publishLocalTrajectoryData();
+    void mapToOdomPublishLoop();
     void handleLaserScanMessage(const std::string& sensor_id,
         const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg);
     void handlePointCloud2Message(const std::string& sensor_id,
@@ -65,6 +70,11 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
     std::mutex mutex_;
+    std::mutex map_to_odom_mutex_;
+    geometry_msgs::msg::TransformStamped cached_map_to_odom_;
+    bool has_cached_map_to_odom_{false};
+    std::atomic_bool map_to_odom_publisher_running_{false};
+    std::thread map_to_odom_publisher_thread_;
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr occupancy_grid_publisher_;
     rclcpp::Publisher<SubmapListMsgT>::SharedPtr submap_list_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr tracked_pose_publisher_;
