@@ -102,6 +102,7 @@ private:
         const std::string& frame_id);
     void clearDebugTrajectories();
     void publishRotateToGoal(double yaw_error);
+    bool isOdomVelocityValid(const OdomMsgT& odom, const Options& options) const;
     Options getOptions() const;
     rcl_interfaces::msg::SetParametersResult handleParameterUpdate(
         const std::vector<rclcpp::Parameter>& parameters);

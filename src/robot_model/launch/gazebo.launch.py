@@ -12,7 +12,7 @@ def generate_launch_description():
     ld = LaunchDescription()
     pkg_share = FindPackageShare(package=package_name).find(package_name)
     urdf_model_path = os.path.join(pkg_share, f'urdf/{urdf_name}')
-    world_path = os.path.join(pkg_share, 'world', 'fish.world')
+    world_path = os.path.join(pkg_share, 'world', 'fish_complex.world')
 
     # Start Gazebo server
     start_gazebo_cmd = ExecuteProcess(

@@ -403,6 +403,11 @@
             <joint_name>left_wheel_joint</joint_name>
         </plugin>
 
+        <!--
+          注意：该 OdometryPublisher 曾在姿态连续时输出约 2π / dt 的瞬时 angular.z，
+          疑似插件bug，与四元数符号翻转后的角速度差分有关。local_planner 会拒绝这类超出
+          速度包络的数据并停车；升级 Gazebo 或替换里程计来源后，请复测此问题。
+        -->
         <plugin name="gz::sim::systems::OdometryPublisher" filename="gz-sim-odometry-publisher-system">
             <dimensions>3</dimensions>
             <odom_topic>/odom</odom_topic>

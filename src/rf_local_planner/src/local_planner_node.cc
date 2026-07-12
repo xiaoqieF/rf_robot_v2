@@ -157,6 +157,15 @@ void LocalPlannerNode::handleFollowPath()
             continue;
         }
 
+        if (!isOdomVelocityValid(*odom_msg, options)) {
+            L_PLANNER_WARN(
+                "Ignoring invalid odometry velocity: linear_x={}, angular_z={}; publishing stop.",
+                odom_msg->twist.twist.linear.x, odom_msg->twist.twist.angular.z);
+            publishZeroVelocity();
+            rate.sleep();
+            continue;
+        }
+
         Pose2D robot_pose;
         if (!getRobotPose(robot_pose)) {
             publishZeroVelocity();
@@ -245,9 +254,18 @@ void LocalPlannerNode::handleFollowPath()
         }
 
         no_control_cycles = 0;
+        if (!std::isfinite(best.linear_vel) || !std::isfinite(best.angular_vel)) {
+            L_PLANNER_WARN(
+                "Refusing to publish non-finite velocity command: linear_x={}, angular_z={}.",
+                best.linear_vel, best.angular_vel);
+            publishZeroVelocity();
+            rate.sleep();
+            continue;
+        }
+
         TwistMsgT cmd;
-        cmd.linear.x = best.linear_vel;
-        cmd.angular.z = best.angular_vel;
+        cmd.linear.x = std::clamp(best.linear_vel, options.min_vel_x, options.max_vel_x);
+        cmd.angular.z = std::clamp(best.angular_vel, options.min_vel_theta, options.max_vel_theta);
         cmd_vel_pub_->publish(cmd);
         zero_cmd_published_ = false;
         publishTrajectory(best, plan.header.frame_id.empty() ? "map" : plan.header.frame_id);
@@ -393,6 +411,21 @@ void LocalPlannerNode::publishRotateToGoal(double yaw_error)
     cmd.angular.z = std::clamp(yaw_error * 1.5, options.min_vel_theta, options.max_vel_theta);
     cmd_vel_pub_->publish(cmd);
     zero_cmd_published_ = false;
+}
+
+bool LocalPlannerNode::isOdomVelocityValid(const OdomMsgT& odom, const Options& options) const
+{
+    const double control_dt = 1.0 / std::max(1.0, options.control_frequency);
+    const double linear_velocity = odom.twist.twist.linear.x;
+    const double angular_velocity = odom.twist.twist.angular.z;
+    const double min_linear = options.min_vel_x - options.acc_lim_x * control_dt;
+    const double max_linear = options.max_vel_x + options.acc_lim_x * control_dt;
+    const double min_angular = options.min_vel_theta - options.acc_lim_theta * control_dt;
+    const double max_angular = options.max_vel_theta + options.acc_lim_theta * control_dt;
+
+    return std::isfinite(linear_velocity) && std::isfinite(angular_velocity) &&
+        linear_velocity >= min_linear && linear_velocity <= max_linear &&
+        angular_velocity >= min_angular && angular_velocity <= max_angular;
 }
 
 LocalPlannerNode::Options LocalPlannerNode::getOptions() const
