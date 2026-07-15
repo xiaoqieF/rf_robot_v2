@@ -46,3 +46,16 @@
   gz_topic_name: '/scan'
   gz_type_name: 'gz.msgs.LaserScan'
   direction: 'GZ_TO_ROS'
+
+# RGB 摄像头的桥接配置
+- ros_topic_name: '/camera/image_raw'
+  ros_type_name: 'sensor_msgs/msg/Image'
+  gz_topic_name: '/camera/image_raw'
+  gz_type_name: 'gz.msgs.Image'
+  direction: 'GZ_TO_ROS'
+
+- ros_topic_name: '/camera/image_raw/camera_info'
+  ros_type_name: 'sensor_msgs/msg/CameraInfo'
+  gz_topic_name: '/camera/image_raw/camera_info'
+  gz_type_name: 'gz.msgs.CameraInfo'
+  direction: 'GZ_TO_ROS'

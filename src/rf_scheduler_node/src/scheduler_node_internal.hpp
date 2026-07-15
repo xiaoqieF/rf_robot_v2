@@ -82,9 +82,9 @@ constexpr std::chrono::seconds kNoFrontierStableDuration{8};
 // 连续导航失败达到该次数即终止任务；调大可尝试更多备选目标，调小可更快避开异常导航状态。
 constexpr uint32_t kDefaultMaxFrontierFailures = 10;
 // 构成有效前沿的最小连通栅格数；调大可过滤噪声小前沿，调小可探索狭小或碎片化区域。
-constexpr uint32_t kDefaultMinFrontierClusterSize = 4;
+constexpr uint32_t kDefaultMinFrontierClusterSize = 8;
 // 成功到达前沿后，抑制该前沿中心周围区域的半径（米）；调大可减少重复探索，过大可能跳过邻近未覆盖区域。
-constexpr double kReachedFrontierSuppressRadius = 0.5;
+constexpr double kReachedFrontierSuppressRadius = 1.0;
 // 目标导航失败后，抑制失败目标周围候选点的半径（米）；调大可避免反复失败，过大可能丢弃可行替代点。
 constexpr double kFailedGoalSuppressRadius = 0.35;
 // 开始前沿探索前所需的最少空闲栅格数；调大可确保地图更稳定后再探索，调小可更早开始移动。
