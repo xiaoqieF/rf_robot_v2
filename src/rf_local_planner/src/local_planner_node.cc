@@ -15,6 +15,16 @@
 namespace rf_local_planner
 {
 
+namespace
+{
+
+constexpr double kInscribedRecoverySpeedMetersPerSecond = 0.08;
+constexpr double kInscribedRecoveryMaxDistanceMeters = 0.30;
+constexpr double kInscribedRecoveryTimeoutSeconds = 5.0;
+constexpr int kMaxInscribedRecoveryAttempts = 2;
+
+} // namespace
+
 LocalPlannerNode::LocalPlannerNode()
     : Node("local_planner_node")
 {
@@ -108,6 +118,11 @@ void LocalPlannerNode::handleFollowPath()
     int no_control_cycles = 0;
     double best_goal_distance = std::numeric_limits<double>::infinity();
     auto last_progress_time = start_time;
+    int inscribed_recovery_attempts = 0;
+    bool inscribed_recovery_active = false;
+    Pose2D inscribed_recovery_start_pose;
+    double inscribed_recovery_target_distance = 0.0;
+    rclcpp::Time inscribed_recovery_start_time;
 
     // Main control loop
     while (rclcpp::ok()) {
@@ -140,6 +155,8 @@ void LocalPlannerNode::handleFollowPath()
             no_control_cycles = 0;
             best_goal_distance = std::numeric_limits<double>::infinity();
             last_progress_time = start_time;
+            inscribed_recovery_attempts = 0;
+            inscribed_recovery_active = false;
             L_PLANNER_INFO("Accepted preempted follow path goal with {} poses.", plan.poses.size());
         }
 
@@ -173,6 +190,55 @@ void LocalPlannerNode::handleFollowPath()
             continue;
         }
 
+        if (inscribed_recovery_active) {
+            uint8_t cell_cost = 0;
+            const auto cell_status = getCostmapCellStatus(robot_pose, *costmap_msg, &cell_cost);
+            if (cell_status == CostmapCellStatus::TRAVERSABLE) {
+                L_PLANNER_INFO(
+                    "Inscribed-cost recovery completed after backing up {:.2f} m.",
+                    std::hypot(
+                        robot_pose.x - inscribed_recovery_start_pose.x,
+                        robot_pose.y - inscribed_recovery_start_pose.y));
+                inscribed_recovery_active = false;
+                no_control_cycles = 0;
+                last_progress_time = this->now();
+            } else if (cell_status != CostmapCellStatus::INSCRIBED) {
+                result->tracking_time = this->now() - start_time;
+                result->error_code = ActionFollowPath::Result::NO_VALID_CONTROL;
+                result->error_msg = "inscribed-cost recovery entered an unsafe local costmap cell";
+                L_PLANNER_WARN(
+                    "Stopping inscribed-cost recovery because the robot entered costmap status {} (cost {}).",
+                    static_cast<int>(cell_status), static_cast<unsigned int>(cell_cost));
+                follow_path_server_->terminateCurrent(result);
+                publishZeroVelocity();
+                return;
+            } else {
+                const double recovery_distance = std::hypot(
+                    robot_pose.x - inscribed_recovery_start_pose.x,
+                    robot_pose.y - inscribed_recovery_start_pose.y);
+                const bool target_not_reached = recovery_distance < inscribed_recovery_target_distance;
+                const bool timed_out = (this->now() - inscribed_recovery_start_time) >=
+                    rclcpp::Duration::from_seconds(kInscribedRecoveryTimeoutSeconds);
+                if (!target_not_reached || timed_out) {
+                    result->tracking_time = this->now() - start_time;
+                    result->error_code = ActionFollowPath::Result::REPLAN_REQUIRED;
+                    result->error_msg = "inscribed-cost recovery could not reach a traversable local costmap cell";
+                    L_PLANNER_WARN(
+                        "Inscribed-cost recovery failed after backing up {:.2f} m for {:.2f} s (target {:.2f} m).",
+                        recovery_distance,
+                        (this->now() - inscribed_recovery_start_time).seconds(),
+                        inscribed_recovery_target_distance);
+                    follow_path_server_->terminateCurrent(result);
+                    publishZeroVelocity();
+                    return;
+                }
+
+                publishInscribedRecovery();
+                rate.sleep();
+                continue;
+            }
+        }
+
         // 1. Prune the plan to get the local segment, find the nearest point to the robot and remove all previous points
         auto plan_segment = prunePlan(plan, robot_pose);
         if (plan_segment.empty()) {
@@ -204,7 +270,7 @@ void LocalPlannerNode::handleFollowPath()
 
         if ((this->now() - last_progress_time) >= rclcpp::Duration::from_seconds(options.no_progress_timeout)) {
             result->tracking_time = this->now() - start_time;
-            result->error_code = ActionFollowPath::Result::NO_VALID_CONTROL;
+            result->error_code = ActionFollowPath::Result::REPLAN_REQUIRED;
             result->error_msg = "path tracking stalled without measurable progress";
             follow_path_server_->terminateCurrent(result);
             publishZeroVelocity();
@@ -240,11 +306,42 @@ void LocalPlannerNode::handleFollowPath()
             clearDebugTrajectories();
         }
         if (best.collision || best.poses.empty()) {
+            uint8_t current_cell_cost = 0;
+            const auto current_cell_status = getCostmapCellStatus(
+                robot_pose, *costmap_msg, &current_cell_cost);
+            if (current_cell_status == CostmapCellStatus::INSCRIBED &&
+                inscribed_recovery_attempts < kMaxInscribedRecoveryAttempts) {
+                const auto recovery_distance = findReverseRecoveryDistance(robot_pose, *costmap_msg);
+                if (recovery_distance.has_value()) {
+                    ++inscribed_recovery_attempts;
+                    inscribed_recovery_active = true;
+                    inscribed_recovery_start_pose = robot_pose;
+                    inscribed_recovery_target_distance = *recovery_distance;
+                    inscribed_recovery_start_time = this->now();
+                    no_control_cycles = 0;
+                    last_progress_time = inscribed_recovery_start_time;
+                    L_PLANNER_WARN(
+                        "Starting inscribed-cost recovery attempt {}/{}: current cost {}, reverse target {:.2f} m.",
+                        inscribed_recovery_attempts,
+                        kMaxInscribedRecoveryAttempts,
+                        static_cast<unsigned int>(current_cell_cost),
+                        inscribed_recovery_target_distance);
+                    publishInscribedRecovery();
+                    rate.sleep();
+                    continue;
+                }
+
+                inscribed_recovery_attempts = kMaxInscribedRecoveryAttempts;
+                L_PLANNER_WARN(
+                    "Cannot start inscribed-cost recovery: no traversable cell exists within {:.2f} m behind the robot.",
+                    kInscribedRecoveryMaxDistanceMeters);
+            }
+
             ++no_control_cycles;
             publishZeroVelocity();
             if (no_control_cycles >= std::max(1, options.max_no_control_cycles)) {
                 result->tracking_time = this->now() - start_time;
-                result->error_code = ActionFollowPath::Result::NO_VALID_CONTROL;
+                result->error_code = ActionFollowPath::Result::REPLAN_REQUIRED;
                 result->error_msg = "failed to find a feasible local trajectory";
                 follow_path_server_->terminateCurrent(result);
                 return;
@@ -409,6 +506,14 @@ void LocalPlannerNode::publishRotateToGoal(double yaw_error)
     TwistMsgT cmd;
     cmd.linear.x = 0.0;
     cmd.angular.z = std::clamp(yaw_error * 1.5, options.min_vel_theta, options.max_vel_theta);
+    cmd_vel_pub_->publish(cmd);
+    zero_cmd_published_ = false;
+}
+
+void LocalPlannerNode::publishInscribedRecovery()
+{
+    TwistMsgT cmd;
+    cmd.linear.x = -kInscribedRecoverySpeedMetersPerSecond;
     cmd_vel_pub_->publish(cmd);
     zero_cmd_published_ = false;
 }
@@ -802,28 +907,78 @@ double LocalPlannerNode::computePathProgress(
     return progress;
 }
 
-bool LocalPlannerNode::isCollision(const Pose2D& pose, const CostmapMsgT& costmap, double* max_cost) const
+LocalPlannerNode::CostmapCellStatus LocalPlannerNode::getCostmapCellStatus(
+    const Pose2D& pose, const CostmapMsgT& costmap, uint8_t* cost) const
 {
-    // The local costmap is already inflated using the robot footprint, so
-    // checking the center cell is sufficient to determine if the robot is in collision.
+    if (!std::isfinite(costmap.metadata.resolution) || costmap.metadata.resolution <= 0.0) {
+        return CostmapCellStatus::OUT_OF_BOUNDS;
+    }
+
     unsigned int mx = 0;
     unsigned int my = 0;
     if (!worldToMap(costmap, pose.x, pose.y, mx, my)) {
-        return true;
+        return CostmapCellStatus::OUT_OF_BOUNDS;
     }
 
     const auto index = my * costmap.metadata.size_x + mx;
     if (index >= costmap.data.size()) {
-        return true;
+        return CostmapCellStatus::OUT_OF_BOUNDS;
     }
 
     const uint8_t cell_cost = costmap.data[index];
+    if (cost != nullptr) {
+        *cost = cell_cost;
+    }
+    if (cell_cost == rf_costmap::NO_INFORMATION) {
+        return CostmapCellStatus::UNKNOWN;
+    }
+    if (cell_cost >= rf_costmap::LETHAL_OBSTACLE) {
+        return CostmapCellStatus::LETHAL;
+    }
+    if (cell_cost >= rf_costmap::INSCRIBED_INFLATED_OBSTACLE) {
+        return CostmapCellStatus::INSCRIBED;
+    }
+    return CostmapCellStatus::TRAVERSABLE;
+}
+
+std::optional<double> LocalPlannerNode::findReverseRecoveryDistance(
+    const Pose2D& pose, const CostmapMsgT& costmap) const
+{
+    const double resolution = costmap.metadata.resolution;
+    if (!std::isfinite(resolution) || resolution <= 0.0) {
+        return std::nullopt;
+    }
+
+    const double probe_step = std::clamp(resolution, 0.01, 0.05);
+    for (double distance = probe_step;
+         distance <= kInscribedRecoveryMaxDistanceMeters + std::numeric_limits<double>::epsilon();
+         distance += probe_step) {
+        Pose2D probe_pose = pose;
+        probe_pose.x -= distance * std::cos(pose.yaw);
+        probe_pose.y -= distance * std::sin(pose.yaw);
+
+        const auto status = getCostmapCellStatus(probe_pose, costmap);
+        if (status == CostmapCellStatus::TRAVERSABLE) {
+            return distance;
+        }
+        if (status != CostmapCellStatus::INSCRIBED) {
+            return std::nullopt;
+        }
+    }
+
+    return std::nullopt;
+}
+
+bool LocalPlannerNode::isCollision(const Pose2D& pose, const CostmapMsgT& costmap, double* max_cost) const
+{
+    // The local costmap is already inflated using the robot footprint, so
+    // checking the center cell is sufficient to determine if the robot is in collision.
+    uint8_t cell_cost = 0;
+    const auto status = getCostmapCellStatus(pose, costmap, &cell_cost);
     if (max_cost != nullptr) {
         *max_cost = static_cast<double>(cell_cost);
     }
-
-    return cell_cost == rf_costmap::NO_INFORMATION ||
-        cell_cost >= rf_costmap::INSCRIBED_INFLATED_OBSTACLE;
+    return status != CostmapCellStatus::TRAVERSABLE;
 }
 
 bool LocalPlannerNode::worldToMap(
