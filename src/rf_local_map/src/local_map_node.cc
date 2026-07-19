@@ -8,9 +8,9 @@ void LocalMapNode::init()
 {
     rf_costmap::CostmapConfig config;
     config.map_name = "/local_costmap";
-    config.resolution = 0.025; // 2.5 cm resolution
-    config.width = 5; // 5 meters wide
-    config.height = 5; // 5 meters tall
+    config.resolution = 0.01; // 1 cm resolution
+    config.width = 4; // 3 meters wide
+    config.height = 4; // 3 meters tall
     config.rolling_window = true;
     config.update_rate = 10; // 10 Hz
     config.publish_rate = 5; // 5 Hz

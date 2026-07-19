@@ -293,7 +293,7 @@ std::vector<SchedulerNode::FrontierCandidate> SchedulerNode::computeFrontierCand
                             centroid_distance_m * 0.6;
 
                         if (robot_pose != nullptr) {
-                            score -= robot_distance * 0.35;
+                            score -= robot_distance * 1.0;
                             if (robot_distance > std::numeric_limits<double>::epsilon()) {
                                 const double candidate_yaw = std::atan2(
                                     wy - robot_pose->pose.position.y,

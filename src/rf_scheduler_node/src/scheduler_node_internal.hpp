@@ -102,7 +102,7 @@ constexpr double kGoalClearanceRadiusMeters = 0.25;
 // 安全检查中候选目标中心必须保持已知自由的半径（米）；调大可避免目标落在未知边缘，过大将降低目标可用性。
 constexpr double kGoalKnownRadiusMeters = 0.10;
 // 朝向与候选点方向一致时的评分权重；调大更偏好少转向的目标，调小则更重视前沿规模、间隙和距离。
-constexpr double kFrontierHeadingAlignmentWeight = 1.5;
+constexpr double kFrontierHeadingAlignmentWeight = 30.0;
 
 enum class FutureWaitStatus
 {
