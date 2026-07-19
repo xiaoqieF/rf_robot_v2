@@ -13,7 +13,7 @@
 -- limitations under the License.
 
 POSE_GRAPH = {
-  optimize_every_n_nodes = 180,
+  optimize_every_n_nodes = 120,
   constraint_builder = {
     sampling_ratio = 0.3,
     max_constraint_distance = 10.,
