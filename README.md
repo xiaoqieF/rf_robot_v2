@@ -4,6 +4,10 @@
 
 仓库里的核心思路不是把所有功能拆成单独进程，而是通过 `rf_main` 把多个自研 node 组合到一个主进程里运行，再配合 `robot_model` 提供 Gazebo 仿真入口。
 
+## 演示视频
+
+![RF Robot V2 项目运行演示](docs/demo.gif)
+
 ## 当前项目已经实现了什么
 
 - `rf_main`
